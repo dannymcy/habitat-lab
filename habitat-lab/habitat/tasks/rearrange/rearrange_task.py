@@ -325,13 +325,13 @@ class RearrangeTask(NavigationTask):
             done = True
 
         # Check that none of the articulated agents are violating the hold constraint
-        for grasp_mgr in self._sim.agents_mgr.grasp_iter:
-            if (
-                grasp_mgr.is_violating_hold_constraint()
-                and self._constraint_violation_ends_episode
-            ):
-                done = True
-                break
+        # for grasp_mgr in self._sim.agents_mgr.grasp_iter:
+        #     if (
+        #         grasp_mgr.is_violating_hold_constraint()
+        #         and self._constraint_violation_ends_episode
+        #     ):
+        #         done = True
+        #         break
 
         if done:
             rearrange_logger.debug("-" * 10)

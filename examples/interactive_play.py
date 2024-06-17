@@ -54,17 +54,32 @@ from typing import Any, Dict, List
 import magnum as mn
 import numpy as np
 
+from omegaconf import DictConfig
+from habitat.config.default_structured_configs import HeadRGBSensorConfig, HeadPanopticSensorConfig
+from habitat.config.default_structured_configs import SimulatorConfig, HabitatSimV0Config, AgentConfig
+
 import habitat
 import habitat.tasks.rearrange.rearrange_task
-from habitat.articulated_agent_controllers import HumanoidRearrangeController
+import warnings
+from habitat.tasks.rearrange.rearrange_sim import RearrangeSim
+warnings.filterwarnings('ignore')
 from habitat.config.default import get_agent_config
 from habitat.config.default_structured_configs import (
     GfxReplayMeasureMeasurementConfig,
     PddlApplyActionConfig,
     ThirdRGBSensorConfig,
 )
+
+from habitat_sim.physics import JointMotorSettings, MotionType
+from omegaconf import OmegaConf
+from habitat.articulated_agent_controllers import (
+    HumanoidRearrangeController,
+    HumanoidSeqPoseController,
+)
+from habitat.config.default_structured_configs import HumanoidJointActionConfig, HumanoidPickActionConfig
+
 from habitat.core.logging import logger
-from habitat.tasks.rearrange.actions.actions import ArmEEAction
+from habitat.tasks.rearrange.actions.actions import ArmEEAction, HumanoidJointAction
 from habitat.tasks.rearrange.rearrange_sensors import GfxReplayMeasure
 from habitat.tasks.rearrange.utils import euler_to_quat, write_gfx_replay
 from habitat.utils.visualizations.utils import (
@@ -73,14 +88,26 @@ from habitat.utils.visualizations.utils import (
 )
 from habitat_sim.utils import viz_utils as vut
 
+from habitat.config.default_structured_configs import TaskConfig, EnvironmentConfig, DatasetConfig, HabitatConfig
+from habitat.config.default_structured_configs import ArmActionConfig, BaseVelocityActionConfig, OracleNavActionConfig
+from habitat.core.env import Env
+
 try:
     import pygame
 except ImportError:
     pygame = None
 
 # Please reach out to the paper authors to obtain this file
-DEFAULT_POSE_PATH = "data/humanoids/humanoid_data/walking_motion_processed.pkl"
-DEFAULT_CFG = "benchmark/rearrange/play/play.yaml"
+control_humanoid_ = False
+if control_humanoid_:
+    # DEFAULT_POSE_PATH = "data/humanoids/humanoid_data/walking_motion_processed_smplx.pkl"
+    DEFAULT_POSE_PATH = "data/humanoids/humanoid_data/female_2/female_2_motion_data_smplx.pkl"
+    DEFAULT_CFG = "benchmark/rearrange/play/main_human.yaml"
+else:
+    DEFAULT_POSE_PATH = "data/humanoids/humanoid_data/female_2/female_2_motion_data_smplx.pkl"
+    DEFAULT_CFG = "benchmark/rearrange/play/play_hssd.yaml"
+    # DEFAULT_CFG = "benchmark/rearrange/play/main_robot.yaml"
+
 DEFAULT_RENDER_STEPS_LIMIT = 60
 SAVE_VIDEO_DIR = "./data/vids"
 SAVE_ACTIONS_DIR = "./data/interactive_play_replays"
@@ -111,8 +138,13 @@ def get_input_vel_ctlr(
     arm_action_name = f"{agent_k}arm_action"
 
     if control_humanoid:
-        base_action_name = f"{agent_k}humanoidjoint_action"
+        base_action_name = f"{agent_k}humanoid_joint_action"
         base_key = "human_joints_trans"
+        arm_key = "arm_action"
+        grip_key = "grip_action"
+        # arm_action_name = f"{agent_k}empty"
+        # arm_key = "empty_action"
+        # grip_key = "empty_action"
     else:
         if "spot" in cfg:
             base_action_name = f"{agent_k}base_velocity_non_cylinder"
@@ -121,7 +153,26 @@ def get_input_vel_ctlr(
         arm_key = "arm_action"
         grip_key = "grip_action"
         base_key = "base_vel"
+    
+    # print()
+    # print(env.action_space.spaces[arm_action_name].spaces)
+    # for name_ in env.action_space.spaces[arm_action_name].spaces:
+    #     print(name_)
+    # print()
 
+    # env.action_space.spaces
+    # arm_action
+    # base_velocity
+    # empty
+    # rearrange_stop
+
+    # env.action_space.spaces["arm_action"].spaces
+    # arm_action
+    # grip_action
+
+    # env.action_space.spaces["empty"].spaces
+    # empty_action
+ 
     if arm_action_name in env.action_space.spaces:
         arm_action_space = env.action_space.spaces[arm_action_name].spaces[
             arm_key
@@ -335,9 +386,18 @@ def get_input_vel_ctlr(
             )
         else:
             # Use the controller
-            relative_pos = mn.Vector3(base_action[0], 0, base_action[1])
+            # base_action = humanoid_controller.get_pose()
+            # relative_pos = mn.Vector3(base_action[0], 0, base_action[1])
+
+            # Key Error here: the human pose never get updated because env.step does not include the solver for human.
+            # base_action_name is not in env.action_space.spaces
+            # Getting it to work is too complex in interactive_play setting.
+            relative_pos = env.sim.articulated_agent.base_pos + mn.Vector3(0,0,0.5)
             humanoid_controller.calculate_walk_pose(relative_pos)
             base_action = humanoid_controller.get_pose()
+
+    # print(base_action)
+    # print()
 
     if keys[pygame.K_PERIOD]:
         # Print the current position of the articulated agent, useful for debugging.
@@ -473,7 +533,7 @@ def play_env(env, args, config):
 
     if not args.no_render:
         draw_obs = observations_to_image(obs, {})
-        pygame.init()
+        # pygame.init()
         screen = pygame.display.set_mode(
             [draw_obs.shape[1], draw_obs.shape[0]]
         )
@@ -495,7 +555,10 @@ def play_env(env, args, config):
     humanoid_controller = None
     if args.use_humanoid_controller:
         humanoid_controller = HumanoidRearrangeController(args.walk_pose_path)
-        humanoid_controller.reset(env._sim.articulated_agent.base_pos)
+        humanoid_controller.reset(env.sim.articulated_agent.base_transformation)  # https://github.com/facebookresearch/habitat-lab/issues/1913
+        # humanoid_controller = HumanoidSeqPoseController(args.walk_pose_path)
+        # humanoid_controller.reset(env.sim.articulated_agent.base_transformation)
+        # humanoid_controller.apply_base_transformation(env.sim.articulated_agent.base_transformation)
 
     while True:
         if (
@@ -785,19 +848,24 @@ if __name__ == "__main__":
             env_config.max_episode_steps = 0
 
         if args.control_humanoid:
-            args.disable_inverse_kinematics = True
-
-        if not args.disable_inverse_kinematics:
-            if "arm_action" not in task_config.actions:
-                raise ValueError(
-                    "Action space does not have any arm control so cannot add inverse kinematics. Specify the `--disable-inverse-kinematics` option"
-                )
+            sim_config.agents.main_agent.articulated_agent_urdf = (
+                "./data/humanoids/humanoid_data/female_2/female_2.urdf"
+            )
+        else:
+            if not args.disable_inverse_kinematics:
+                if "arm_action" not in task_config.actions:
+                    raise ValueError(
+                        "Action space does not have any arm control so cannot add inverse kinematics. Specify the `--disable-inverse-kinematics` option"
+                    )
             sim_config.agents.main_agent.ik_arm_urdf = (
                 "./data/robots/hab_fetch/robots/fetch_onlyarm.urdf"
             )
             task_config.actions.arm_action.arm_controller = "ArmEEAction"
+        
         if task_config.type == "RearrangePddlTask-v0":
             task_config.actions["pddl_apply_action"] = PddlApplyActionConfig()
+
+    pygame.init()
 
     with habitat.Env(config=config) as env:
         play_env(env, args, config)

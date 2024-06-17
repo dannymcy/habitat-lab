@@ -9,6 +9,7 @@ import os.path as osp
 import random
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, List
+import copy
 
 import numpy as np
 from omegaconf import OmegaConf
@@ -299,7 +300,7 @@ def get_arg_parser():
     parser.add_argument(
         "--out",
         type=str,
-        default=None,
+        default="data/hab3_bench_assets/episode_datasets/scene_id.json.gz",
         help="Relative path to output generated RearrangeEpisodeDataset.",
     )
 
@@ -349,6 +350,40 @@ def get_arg_parser():
     return parser
 
 
+def find_and_replace_value(cfg, scene_id):
+    # Deep copy the original configuration dictionary
+    cfg_copy = copy.deepcopy(cfg)
+    
+    # Replace 'scene_id' with the actual scene_id in all relevant places in the copied configuration
+    cfg_copy['scene_sets'][0]['name'] = scene_id
+    cfg_copy['scene_sets'][0]['included_substrings'][0] = scene_id
+    cfg_copy['scene_sampler']['params']['scene'] = scene_id
+    cfg_copy['scene_sampler']['params']['scene_sets'][0] = scene_id
+    
+    return cfg_copy
+
+
+def get_scene_ids(directory):
+    """
+    Extract the part before '.scene_instance.json' from filenames in the specified directory and return them as a list.
+    
+    Parameters:
+    directory (str): Path to the directory containing the files.
+    
+    Returns:
+    list: List of extracted scene IDs.
+    """
+    scene_id_list = []
+    
+    for filename in os.listdir(directory):
+        if filename.endswith(".scene_instance.json"):
+            scene_id = filename.split(".scene_instance.json")[0]
+            scene_id_list.append(scene_id)
+    
+    return scene_id_list
+
+
+
 if __name__ == "__main__":
     parser = get_arg_parser()
     args, _ = parser.parse_known_args()
@@ -359,6 +394,7 @@ if __name__ == "__main__":
 
     # merge the configuration from file with the default
     cfg = get_config_defaults()
+
     logger.info(f"\n\nOriginal Config:\n{cfg}")
     if args.config is not None:
         assert osp.exists(
@@ -369,62 +405,73 @@ if __name__ == "__main__":
 
     logger.info(f"\n\nModified Config:\n{cfg}\n\n")
 
-    dataset = RearrangeDatasetV0()
-    with RearrangeEpisodeGenerator(
-        cfg=cfg,
-        debug_visualization=args.debug,
-        limit_scene_set=args.limit_scene_set,
-        num_episodes=args.num_episodes,
-    ) as ep_gen:
-        if not osp.isdir(args.db_output):
-            os.makedirs(args.db_output)
-        ep_gen.dbv.output_path = osp.abspath(args.db_output)
+    cfg_copy = copy.deepcopy(cfg)
+    scene_dir = "data/hab3_bench_assets/hab3-hssd/scenes"
+    # scene_id_list = get_scene_ids(scene_dir)
+    # scene_id_list = scene_id_list[0:30]
+    # scene_id_list = ["102344049", "102344022"]
+    # scene_id_list = ["102343992", "102344022", "102344049"]
+    scene_id_list = ["102816852"]
 
-        # Simulator has been initialized and SceneDataset is populated
-        if args.list:
-            # NOTE: you can retrieve a string CSV rep of the full SceneDataset with ep_gen.sim.metadata_mediator.dataset_report()
-            print_metadata_mediator(ep_gen)
-        else:
-            import time
+    for scene_id in scene_id_list:
+        cfg = find_and_replace_value(cfg_copy, scene_id)
 
-            start_time = time.time()
-            dataset.episodes += ep_gen.generate_episodes(
-                args.num_episodes, args.verbose
-            )
-            output_path = args.out
-            if output_path is None:
-                # default
-                output_path = "rearrange_ep_dataset.json.gz"
-            elif osp.isdir(output_path) or output_path.endswith("/"):
-                # append a default filename
-                output_path = (
-                    osp.abspath(output_path) + "/rearrange_ep_dataset.json.gz"
-                )
+        dataset = RearrangeDatasetV0()
+        with RearrangeEpisodeGenerator(
+            cfg=cfg,
+            debug_visualization=args.debug,
+            limit_scene_set=args.limit_scene_set,
+            num_episodes=args.num_episodes,
+        ) as ep_gen:
+            if not osp.isdir(args.db_output):
+                os.makedirs(args.db_output)
+            ep_gen.dbv.output_path = osp.abspath(args.db_output)
+
+            # Simulator has been initialized and SceneDataset is populated
+            if args.list:
+                # NOTE: you can retrieve a string CSV rep of the full SceneDataset with ep_gen.sim.metadata_mediator.dataset_report()
+                print_metadata_mediator(ep_gen)
             else:
-                # filename
-                if not output_path.endswith(".json.gz"):
-                    output_path += ".json.gz"
+                import time
 
-            if (
-                not osp.exists(osp.dirname(output_path))
-                and len(osp.dirname(output_path)) > 0
-            ):
-                os.makedirs(osp.dirname(output_path))
-            # serialize the dataset
-            import gzip
+                start_time = time.time()
+                dataset.episodes += ep_gen.generate_episodes(
+                    args.num_episodes, args.verbose
+                )
+                output_path = args.out.replace("scene_id", scene_id)
+                if output_path is None:
+                    # default
+                    output_path = "rearrange_ep_dataset.json.gz"
+                elif osp.isdir(output_path) or output_path.endswith("/"):
+                    # append a default filename
+                    output_path = (
+                        osp.abspath(output_path) + "/rearrange_ep_dataset.json.gz"
+                    )
+                else:
+                    # filename
+                    if not output_path.endswith(".json.gz"):
+                        output_path += ".json.gz"
 
-            with gzip.open(output_path, "wt") as f:
-                f.write(dataset.to_json())
+                if (
+                    not osp.exists(osp.dirname(output_path))
+                    and len(osp.dirname(output_path)) > 0
+                ):
+                    os.makedirs(osp.dirname(output_path))
+                # serialize the dataset
+                import gzip
 
-            logger.info(
-                "=============================================================="
-            )
-            logger.info(
-                f"RearrangeEpisodeGenerator generated {args.num_episodes} episodes in {time.time()-start_time} seconds."
-            )
-            logger.info(
-                f"RearrangeDatasetV0 saved to '{osp.abspath(output_path)}'"
-            )
-            logger.info(
-                "=============================================================="
-            )
+                with gzip.open(output_path, "wt") as f:
+                    f.write(dataset.to_json())
+
+                logger.info(
+                    "=============================================================="
+                )
+                logger.info(
+                    f"RearrangeEpisodeGenerator generated {args.num_episodes} episodes in {time.time()-start_time} seconds."
+                )
+                logger.info(
+                    f"RearrangeDatasetV0 saved to '{osp.abspath(output_path)}'"
+                )
+                logger.info(
+                    "=============================================================="
+                )

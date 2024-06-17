@@ -283,7 +283,7 @@ class MotionConverterSMPLX:
             new_pose += list(Ql)
         return root_translation, root_rotation, new_pose
 
-    def convert_motion_file(self, motion_path, output_path="output_motion"):
+    def convert_motion_file(self, motion_path, human_rot=None, reverse=False, output_path="output_motion"):
         """
         Convert a npz file containing a SMPL-X motion into a file of rotations
         that can be played in Habitat
@@ -295,6 +295,8 @@ class MotionConverterSMPLX:
             fps = content_motion["mocap_frame_rate"]
         elif "frame_rate" in content_motion:
             fps = content_motion["frame_rate"]
+        else:
+            fps = 30  # Motion-X
         pose_info = {
             "trans": content_motion["trans"],
             "root_orient": content_motion["root_orient"],
@@ -309,6 +311,10 @@ class MotionConverterSMPLX:
                 pose_info["root_orient"][index],
                 pose_info["pose"][index],
             )
+            
+            if human_rot is not None:
+                root_rot = self.correct_orientation(root_rot, human_rot, reverse, print_=(index==0))
+
             transform_as_mat = np.array(mn.Matrix4.from_(root_rot, root_trans))
             transform_array.append(transform_as_mat[None, :])
             joints_array.append(np.array(pose_quat)[None, :])
@@ -327,6 +333,103 @@ class MotionConverterSMPLX:
         }
         with open(f"{output_path}.pkl", "wb+") as ff:
             pkl.dump(content_motion, ff)
+
+
+    def euler_to_rotation_matrix(self, angle):
+        """
+        Convert Euler angles to a rotation matrix.
+
+        :param angles: A 3-element array representing the Euler angles (in radians).
+        :return: A 3x3 rotation matrix.
+        """
+        x, y, z = angle[0], angle[1], angle[2]
+
+        Rx = np.array([
+            [1, 0, 0],
+            [0, np.cos(x), -np.sin(x)],
+            [0, np.sin(x), np.cos(x)]
+        ])
+
+        Ry = np.array([
+            [np.cos(y), 0, np.sin(y)],
+            [0, 1, 0],
+            [-np.sin(y), 0, np.cos(y)]
+        ])
+
+        Rz = np.array([
+            [np.cos(z), -np.sin(z), 0],
+            [np.sin(z), np.cos(z), 0],
+            [0, 0, 1]
+        ])
+
+        # Combined rotation matrix
+        R = Rz @ Ry @ Rx
+        return R
+
+
+    def extract_y_angle(self, rotation_matrix):
+        """
+        Extract the y angle from a rotation matrix.
+        """
+        sy = np.sqrt(rotation_matrix[0, 0] ** 2 + rotation_matrix[2, 0] ** 2)
+        singular = sy < 1e-6
+
+        if not singular:
+            y_angle = np.arctan2(rotation_matrix[2, 0], rotation_matrix[0, 0])
+        else:
+            y_angle = 0
+
+        return y_angle
+
+
+    def correct_orientation(self, root_orient, human_rot, reverse, print_=False):
+        """
+        Correct the orientation by calculating the difference in y angle.
+        
+        :param root_orient: 3x3 rotation matrix
+        :param angle: 4x4 matrix
+        :return: corrected 3x3 rotation matrix
+        """
+        rotation_matrix_3x3 = root_orient
+        rotation_matrix_4x4 = np.array([
+            [human_rot[0, 0], human_rot[0, 1], human_rot[0, 2]],
+            [human_rot[1, 0], human_rot[1, 1], human_rot[1, 2]],
+            [human_rot[2, 0], human_rot[2, 1], human_rot[2, 2]]
+        ])
+
+        # Extract the y angle from both matrices
+        y_angle_3x3 = self.extract_y_angle(rotation_matrix_3x3)
+        y_angle_4x4 = self.extract_y_angle(rotation_matrix_4x4)
+
+        # Calculate the difference in the y angle
+        y_angle_diff = y_angle_4x4 - y_angle_3x3
+        # print()
+        # print("4x4", y_angle_4x4)
+        # print()
+        # print("3x3", y_angle_3x3)
+        # print()
+
+        # if print_:
+        #     print()
+        #     print(y_angle_diff)
+        #     print()
+
+        # Adjust the y angle difference correctly
+        # if y_angle_diff > 0:
+        #     y_angle_diff -= np.pi
+        # else:
+        #     y_angle_diff += np.pi
+
+        # Create a rotation matrix for the y angle difference
+        if reverse:
+            R = self.euler_to_rotation_matrix([np.pi, y_angle_diff, 0])
+        else:
+            R = self.euler_to_rotation_matrix([0, y_angle_diff, 0])
+
+        # Apply the correction
+        corrected_matrix = R @ rotation_matrix_3x3
+        return np.array(corrected_matrix)
+
 
 
 if __name__ == "__main__":

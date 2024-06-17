@@ -602,64 +602,81 @@ def _get_robot_spawns(
     start_position = agent.base_pos
 
     # Try to place the robot.
-    for _ in range(num_spawn_attempts):
-        # Place within `distance_threshold` of the object.
-        candidate_navmesh_position = (
-            sim.pathfinder.get_random_navigable_point_near(
-                target_position,
-                distance_threshold,
-                island_index=sim.largest_island_idx,
+    is_feasible_state = False
+    flag = 999
+    ignore_logic = 0
+    target_position_original = target_position
+    while is_feasible_state is False:
+        for _ in range(num_spawn_attempts):
+            # Place within `distance_threshold` of the object.
+            candidate_navmesh_position = (
+                sim.pathfinder.get_random_navigable_point_near(
+                    target_position,
+                    distance_threshold,
+                    island_index=sim.largest_island_idx,
+                )
             )
-        )
-        # get_random_navigable_point_near() can return NaNs for start_position.
-        # If we assign nan position into agent.base_pos, we cannot revert it back
-        # We want to make sure that the generated start_position is valid
-        if np.isnan(candidate_navmesh_position).any():
-            continue
+            # get_random_navigable_point_near() can return NaNs for start_position.
+            # If we assign nan position into agent.base_pos, we cannot revert it back
+            # We want to make sure that the generated start_position is valid
+            if np.isnan(candidate_navmesh_position).any():
+                flag = 1
+                continue
 
-        # get the horizontal distance (XZ planar projection) to the target position
-        hor_disp = candidate_navmesh_position - target_position
-        hor_disp[1] = 0
-        target_distance = np.linalg.norm(hor_disp)
+            # get the horizontal distance (XZ planar projection) to the target position
+            hor_disp = candidate_navmesh_position - target_position
+            hor_disp[1] = 0
+            target_distance = np.linalg.norm(hor_disp)
 
-        if target_distance > distance_threshold:
-            continue
+            if target_distance > distance_threshold:
+                flag = 2
+                continue
 
-        # Face the robot towards the object.
-        relative_target = target_position - candidate_navmesh_position
-        angle_to_object = get_angle_to_pos(relative_target)
-        rotation_noise = np.random.normal(0.0, rotation_perturbation_noise)
-        angle_to_object += rotation_noise
+            # Face the robot towards the object.
+            relative_target = target_position - candidate_navmesh_position
+            angle_to_object = get_angle_to_pos(relative_target)
+            rotation_noise = np.random.normal(0.0, rotation_perturbation_noise)
+            angle_to_object += rotation_noise
 
-        # Set the agent position and rotation
-        set_agent_base_via_obj_trans(
-            candidate_navmesh_position, angle_to_object, agent
-        )
-
-        is_feasible_state = True
-        if filter_colliding_states:
-            # Make sure the robot is not colliding with anything in this
-            # position.
-            sim.perform_discrete_collision_detection()
-            _, details = rearrange_collision(
-                sim,
-                False,
-                ignore_base=False,
+            # Set the agent position and rotation
+            set_agent_base_via_obj_trans(
+                candidate_navmesh_position, angle_to_object, agent
             )
 
-            # Only care about collisions between the robot and scene.
-            is_feasible_state = details.robot_scene_colls == 0
+            is_feasible_state = True
+            if filter_colliding_states:
+                # Make sure the robot is not colliding with anything in this
+                # position.
+                sim.perform_discrete_collision_detection()
+                _, details = rearrange_collision(
+                    sim,
+                    False,
+                    ignore_base=False,
+                )
 
-        if is_feasible_state:
-            # found a feasbile state: reset state and return proposed stated
-            agent.base_pos = start_position
-            agent.base_rot = start_rotation
-            return candidate_navmesh_position, angle_to_object, False
+                # Only care about collisions between the robot and scene.
+                if ignore_logic == 0:
+                    is_feasible_state = details.robot_scene_colls == 0
+
+            if is_feasible_state:
+                # found a feasbile state: reset state and return proposed stated
+                agent.base_pos = start_position
+                agent.base_rot = start_rotation
+                return candidate_navmesh_position, angle_to_object, False
+        
+        if flag == 1:
+            fluctuation_range = 0.25
+            fluctuations = np.random.uniform(-fluctuation_range, fluctuation_range, size=target_position.shape)
+            target_position = target_position_original + fluctuations
+        elif flag == 2:
+            distance_threshold *= 1.01
+        elif flag == 999:
+            ignore_logic = 1
 
     # failure to sample a feasbile state: reset state and return initial conditions
-    agent.base_pos = start_position
-    agent.base_rot = start_rotation
-    return start_position, start_rotation, True
+    # agent.base_pos = start_position
+    # agent.base_rot = start_rotation
+    # return start_position, start_rotation, True
 
 
 def get_angle_to_pos(rel_pos: np.ndarray) -> float:

@@ -118,7 +118,7 @@ class EnvironmentConfig(HabitatBaseConfig):
     :property max_episode_steps: The maximum number of environment steps before the episode ends.
     :property max_episode_seconds: The maximum number of wall-clock seconds before the episode ends.
     """
-    max_episode_steps: int = 1000
+    max_episode_steps: int = 1000000  # 1000
     max_episode_seconds: int = 10000000
     iterator_options: IteratorOptionsConfig = IteratorOptionsConfig()
 
@@ -1575,8 +1575,8 @@ class HabitatSimFisheyeSemanticSensorConfig(SimulatorFisheyeSensorConfig):
 @dataclass
 class HeadRGBSensorConfig(HabitatSimRGBSensorConfig):
     uuid: str = "head_rgb"
-    width: int = 256
-    height: int = 256
+    width: int = 1024
+    height: int = 768
 
 
 @dataclass
@@ -1652,9 +1652,16 @@ class JawDepthSensorConfig(HabitatSimDepthSensorConfig):
 @dataclass
 class ThirdRGBSensorConfig(HabitatSimRGBSensorConfig):
     uuid: str = "third_rgb"
-    width: int = 512
-    height: int = 512
+    width: int = 1024
+    height: int = 768
 
+@dataclass
+class TopRGBSensorConfig(HabitatSimRGBSensorConfig):
+    uuid: str = "top_rgb"
+    width: int = 1024
+    height: int = 768
+    position: List[float] = field(default_factory=lambda: [3.3, 8.0, 2.8])
+    orientation: List[float] = field(default_factory=lambda: [-1.57, 1.57, 0.0])
 
 @dataclass
 class ThirdDepthSensorConfig(HabitatSimDepthSensorConfig):
@@ -2168,6 +2175,12 @@ cs.store(
     group="habitat/simulator/sim_sensors",
     name="third_rgb_sensor",
     node=ThirdRGBSensorConfig,
+)
+
+cs.store(
+    group="habitat/simulator/sim_sensors",
+    name="top_rgb_sensor",
+    node=TopRGBSensorConfig,
 )
 
 
