@@ -360,7 +360,7 @@ def create_static_obj_trans_dict(instance_file, object_mapping, static_categorie
             super_category = object_mapping[template_name]['super_category']
             if super_category in static_categories:
                 translation = obj['translation']
-                object_translation_dict[actual_name] = translation
+                object_translation_dict[actual_name] = mn.Vector3(translation)
     return object_translation_dict
     
 
@@ -424,17 +424,17 @@ def select_pick_place_obj(env, scene_id, pick_obj_idx, place_obj_idx):
     rom = env.sim.get_rigid_object_manager()
 
     # We can query the articulated and rigid objects
-    print("\nList of dynamic articulated objects:")
-    for handle, ao in aom.get_objects_by_handle_substring().items():
-        print(handle, "id", aom.get_object_id_by_handle(handle))
+    # print("\nList of dynamic articulated objects:")
+    # for handle, ao in aom.get_objects_by_handle_substring().items():
+    #     print(handle, "id", aom.get_object_id_by_handle(handle))
 
-    print("\nList of dynamic rigid objects:")
+    # print("\nList of dynamic rigid objects:")
     for handle, ro in rom.get_objects_by_handle_substring().items():
         if ro.awake:
-            print(handle, "id", ro.object_id)
+            # print(handle, "id", ro.object_id)
             template_name = handle.split('_:')[0]
             trans = (rom.get_object_by_id(ro.object_id)).translation
-            actual_name = obj_mapping[template_name]['name'] if template_name in obj_mapping else template_name
+            actual_name = obj_mapping[template_name]['name'] if template_name in obj_mapping else handle
             dynamic_obj_trans_dict[actual_name] = trans
     
     static_obj_room_mapping = map_objects_to_rooms(static_obj_trans_dict, room_dict)
@@ -605,12 +605,7 @@ def customized_humanoid_motion(env, convert_helper, folder_dict, motion_pkl_path
     humanoid_controller.reset(env.sim.agents_mgr[1].articulated_agent.base_transformation)
     humanoid_controller.apply_base_transformation(env.sim.agents_mgr[1].articulated_agent.base_transformation)
 
-    # print()
-    # print(env.sim.agents_mgr[1].articulated_agent.base_transformation)
-    # print()
     for _ in range(humanoid_controller.humanoid_motion.num_poses):
-        # print(env.sim.agents_mgr[1].articulated_agent.base_transformation)
-        # print()
         # These computes the current pose and calculates the next pose
         humanoid_controller.calculate_pose()
         humanoid_controller.next_pose()
@@ -652,6 +647,7 @@ if __name__ == "__main__":
                             os.path.join(data_path, "humanoids/humanoid_data/perform_motion")]
     motion_sets_list, motion_dict, folder_dict, convert_helper = create_motion_sets(npy_file_folder_list, urdf_path, update=True)
     print()
+    print()
     print(motion_sets_list)
     print()
 
@@ -685,6 +681,16 @@ if __name__ == "__main__":
     observations = []
     # set_agents_base_pos(env, mn.Vector3(0, 0.180179, 0), mn.Vector3(0, 0.180179, 0))
     static_obj_trans_dict, dynamic_obj_trans_dict, static_obj_room_mapping, dynamic_obj_room_mapping, aom, rom = select_pick_place_obj(env, scene_id, 0, 0)
+    print()
+    print(static_obj_trans_dict)
+    print()
+    print(dynamic_obj_trans_dict)
+    print()
+    print(static_obj_room_mapping)
+    print()
+    print(dynamic_obj_room_mapping)
+    print()
+    
     # humanoid_rearrange_controller = HumanoidRearrangeController(human_agent_config.motion_data_path)
     # walk_and_pick(env, humanoid_rearrange_controller, pick_object_trans)
     # customized_humanoid_motion(env, convert_helper, folder_dict, get_motion_pkl_path(motion_sets_list[0], motion_dict))
