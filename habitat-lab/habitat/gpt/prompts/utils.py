@@ -55,29 +55,29 @@ def load_response(prompt_name, prompt_path, file_idx=None, get_latest=True):
             return responses
 
 
-def extract_useful_object(prompt_name, prompt_path):
-    if prompt_path.exists():
-        subdirs = [d for d in os.listdir(prompt_path) if os.path.isdir(prompt_path / d)]
-        subdirs.sort()
+# def extract_useful_object(prompt_name, prompt_path):
+#     if prompt_path.exists():
+#         subdirs = [d for d in os.listdir(prompt_path) if os.path.isdir(prompt_path / d)]
+#         subdirs.sort()
 
-    # Find the latest subdirectory
-    latest_subdir = max(subdirs, key=lambda d: (prompt_path / d).stat().st_mtime)
-    json_file_path = prompt_path / latest_subdir / f"{prompt_name}.json"
+#     # Find the latest subdirectory
+#     latest_subdir = max(subdirs, key=lambda d: (prompt_path / d).stat().st_mtime)
+#     json_file_path = prompt_path / latest_subdir / f"{prompt_name}.json"
 
-    if json_file_path.exists():
-        with open(json_file_path, 'r') as f:
-            json_data = json.load(f)
-            res_text = json_data["res"]
+#     if json_file_path.exists():
+#         with open(json_file_path, 'r') as f:
+#             json_data = json.load(f)
+#             res_text = json_data["res"]
 
-            # Extract object descriptions using regular expression
-            object_descriptions = re.findall(r'Object \d+: (.+?)(?=\n|$)', res_text)
-            return object_descriptions
+#             # Extract object descriptions using regular expression
+#             object_descriptions = re.findall(r'Object \d+: (.+?)(?=\n|$)', res_text)
+#             return object_descriptions
 
 
-def extract_words_before(sentence, cutoff_word):
-    words = sentence.split()
-    cutoff_index = words.index(cutoff_word)
-    return ' '.join(words[:cutoff_index])
+# def extract_words_before(sentence, cutoff_word):
+#     words = sentence.split()
+#     cutoff_index = words.index(cutoff_word)
+#     return ' '.join(words[:cutoff_index])
 
 
 def extract_code(prompt_name, prompt_path, video_path, img_id):
