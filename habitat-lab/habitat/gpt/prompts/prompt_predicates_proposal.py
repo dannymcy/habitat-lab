@@ -8,37 +8,42 @@ from habitat.gpt.prompts.utils import *
 from habitat.gpt.query import query
 
 
-def propose_predicates_prompt(obj_room_mapping):
+def propose_predicates_prompt(motion_sets_list, obj_room_mapping):
     contents = f"""
     Input:
-    1.	A dict mapping rigid, static objects to their IDs and rooms: {obj_room_mapping[0]}.
-    2.	A dict mapping rigid, dynamic objects to their IDs and rooms: {obj_room_mapping[1]}.
-    3.  The proposed activities across a day.
+    1.	A human motion list: {motion_sets_list}
+    2.	A dict mapping rigid, static objects to their IDs and rooms: {obj_room_mapping[0]}.
+    3.	A dict mapping rigid, dynamic objects to their IDs and rooms: {obj_room_mapping[1]}.
+    4.  The proposed activities across a day.
 
-    You are a human living in the house. Break down your activities across a day into concrete predicates.
+    You are a human living in the house. Break down your activity at 9pm into concrete predicates.
 
     Constraints:
-    1.  Break down each activity into several (2 to 5) predicates.
+    1.  Break down the activity into several (2 to 5) predicates.
     2.  Predicates should be continuous and logical.
-    3.	Each predicate involves one object or one human motion.
-    4.  ONLY INVOLVE OBJECT FROM STATIC AND DYNAMIC OBJECT DICTS. Do not introduce imaginary objects!
-    5.  Only dynamic objects can be moved, but you can interact with fixed, static objects.
+    3.	Each predicate involves one object and motions. Motions include hand motion (pick/place/pick and place/none) and one human motion from the list to do the predicate.
+    4.  ONLY USE MOTION FROM HUMAN MOTION LIST AND OBJECT FROM STATIC AND DYNAMIC OBJECT DICTS. Do not introduce imaginary motion or objects!
+    5.  Only dynamic objects can be picked/placed, but you can interact with fixed, static objects.
     6. 	All objects are rigid and cannot deform, disassemble, or transform.
 
     Write in the following format. Do not output anything else:
     Time: xxx am/pm
     Intention: basic descriptions.
     Predicates: 
-    1. obj_id: real int. obj_name: xxx. type: static/dynamic. basic descriptions. 
+    1. obj_id: real int. obj_name: xxx. type: static/dynamic. motion: yyy. hand_motion: pick/place/none. basic descriptions involving objects and motions.
     2. ...
+
+    Examples:
+    Predicates: 
+    1. obj_id: real int. obj_name: cup. type: static/dynamic. motion: drink. hand_motion: pick and place. Pick up the cup to drink and place it.
     """
     return contents
 
 
-def propose_predicates(obj_room_mapping, output_path, existing_response=None, temperature_dict=None, 
+def propose_predicates(motion_sets_list, obj_room_mapping, output_path, existing_response=None, temperature_dict=None, 
                   model_dict=None, conversation_hist=None):
 
-    predicates_user_contents_filled = propose_predicates_prompt(obj_room_mapping)
+    predicates_user_contents_filled = propose_predicates_prompt(motion_sets_list, obj_room_mapping)
 
     if existing_response is None:
         system = "You are a helpful assistant."

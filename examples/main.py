@@ -49,6 +49,7 @@ os.chdir(dir_path)
 
 from habitat.gpt.prompts.prompt_intention_proposal import propose_intention
 from habitat.gpt.prompts.prompt_predicates_proposal import propose_predicates
+from habitat.gpt.prompts.prompt_predicates_reflection import reflect_predicates
 from habitat.gpt.prompts.prompt_motion_planning import plan_motion
 from habitat.gpt.prompts.utils import load_response, extract_code
 
@@ -605,8 +606,8 @@ def customized_humanoid_motion(env, convert_helper, folder_dict, motion_pkl_path
         motion_path=motion_npz_path,
         output_path=motion_npz_path.replace(".npz", ""),
         human_rot=env.sim.agents_mgr[1].articulated_agent.base_transformation,
-        reverse=(motion_folder==npy_file_folder_list[0])
-        # reverse=False
+        # reverse=(motion_folder==npy_file_folder_list[0])
+        reverse=False
     )
 
     # Because we want the humanoid controller to generate a motion relative to the current agent, we need to set the reference pose
@@ -643,15 +644,29 @@ def intention_proposal_gpt4(scene_id, obj_room_mapping, temperature_dict, model_
     return conversation_hist
 
 
-def predicates_proposal_gpt4(scene_id, obj_room_mapping, conversation_hist, temperature_dict, model_dict, start_over=False):
+def predicates_proposal_gpt4(scene_id, motion_sets_list, obj_room_mapping, conversation_hist, temperature_dict, model_dict, start_over=False):
     output_dir = pathlib.Path(data_path) / "gpt4_response" / "prompts/predicates_proposal" / scene_id
     os.makedirs(output_dir, exist_ok=True)
     
     if start_over:
-        user, res = propose_predicates(obj_room_mapping, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
+        user, res = propose_predicates(motion_sets_list, obj_room_mapping, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
         time.sleep(20)
     else:
-        user, res = propose_predicates(obj_room_mapping, output_dir, existing_response=load_response("predicates_proposal", output_dir), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
+        user, res = propose_predicates(motion_sets_list, obj_room_mapping, output_dir, existing_response=load_response("predicates_proposal", output_dir), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
+    conversation_hist.append([user, res])
+
+    return conversation_hist
+
+
+def predicates_reflection_gpt4(scene_id, motion_sets_list, obj_room_mapping, conversation_hist, temperature_dict, model_dict, start_over=False):
+    output_dir = pathlib.Path(data_path) / "gpt4_response" / "prompts/predicates_reflection" / scene_id
+    os.makedirs(output_dir, exist_ok=True)
+    
+    if start_over:
+        user, res = reflect_predicates(motion_sets_list, obj_room_mapping, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
+        time.sleep(20)
+    else:
+        user, res = reflect_predicates(motion_sets_list, obj_room_mapping, output_dir, existing_response=load_response("predicates_reflection", output_dir), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
     conversation_hist.append([user, res])
 
     return conversation_hist
@@ -705,7 +720,7 @@ def execute_humanoid(env, extracted_planning, obj_room_mapping, obj_trans_dict):
 
 
 # export QT_QPA_PLATFORM=offscreen
-# gGithub token: hp_cwuhmRHua5sNkR5iqyRfDifxsH8wkO3oPsOk
+# Github token: hp_cwuhmRHua5sNkR5iqyRfDifxsH8wkO3oPsOk
 if __name__ == "__main__":
     output_dir = os.path.join(data_path, "interactive_play_replays")
     os.makedirs(output_dir, exist_ok=True)
@@ -785,6 +800,7 @@ if __name__ == "__main__":
     temperature_dict = {
       "intention_proposal": 0.2,
       "predicates_proposal": 0.2,
+      "predicates_reflection": 0.2,
       "motion_planning": 0.2,
       "code_generation": 0.2
     }
@@ -792,13 +808,15 @@ if __name__ == "__main__":
     model_dict = {
       "intention_proposal": "gpt-4o",
       "predicates_proposal": "gpt-4o",
+      "predicates_reflection": "gpt-4o",
       "motion_planning": "gpt-4o",
       "code_generation": "gpt-4o"
     }
 
-    conversation_hist = intention_proposal_gpt4(scene_id, [static_obj_room_mapping, dynamic_obj_room_mapping], temperature_dict, model_dict, start_over=True)
-    conversation_hist = predicates_proposal_gpt4(scene_id, [static_obj_room_mapping, dynamic_obj_room_mapping], conversation_hist, temperature_dict, model_dict, start_over=True)
-    conversation_hist = motion_planning_gpt4(scene_id, motion_sets_list, [static_obj_room_mapping, dynamic_obj_room_mapping], conversation_hist, temperature_dict, model_dict, start_over=True)
+    conversation_hist = intention_proposal_gpt4(scene_id, [static_obj_room_mapping, dynamic_obj_room_mapping], temperature_dict, model_dict, start_over=False)
+    conversation_hist = predicates_proposal_gpt4(scene_id, motion_sets_list, [static_obj_room_mapping, dynamic_obj_room_mapping], conversation_hist, temperature_dict, model_dict, start_over=False)
+    conversation_hist = predicates_reflection_gpt4(scene_id, motion_sets_list, [static_obj_room_mapping, dynamic_obj_room_mapping], conversation_hist, temperature_dict, model_dict, start_over=False)
+    conversation_hist = motion_planning_gpt4(scene_id, motion_sets_list, [static_obj_room_mapping, dynamic_obj_room_mapping], conversation_hist, temperature_dict, model_dict, start_over=False)
 
     extracted_planning = extract_code("motion_planning", pathlib.Path(data_path) / "gpt4_response" / "prompts/motion_planning" / scene_id)
     print()

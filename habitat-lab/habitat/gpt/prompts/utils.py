@@ -103,6 +103,7 @@ def parse_planning_line(line):
 
     return parsed_elements
 
+
 def extract_code(prompt_name, prompt_path, video_path=None, scene_id=None):
     # Create the video path directory if it doesn't exist
     # video_path.mkdir(parents=True, exist_ok=True)
@@ -126,7 +127,7 @@ def extract_code(prompt_name, prompt_path, video_path=None, scene_id=None):
                 continue
 
             lines = section.split("\n")
-            time = lines[0].strip()  # Ensure 'Time: ' prefix is included
+            time = "Time: " + lines[0].strip()  # Ensure 'Time: ' prefix is included
             intention = lines[1].replace("Intention: ", "").strip()
             
             predicates = []
@@ -146,18 +147,20 @@ def extract_code(prompt_name, prompt_path, video_path=None, scene_id=None):
                 
                 if predicate_section:
                     predicate = line.strip()
-                    if predicate[0].isdigit() and predicate[1] == '.':
+                    if predicate and predicate[0].isdigit() and predicate[1] == '.':
                         predicate = predicate.split('. ', 1)[-1].strip()  # Remove index
-                    predicates.append(predicate)
+                    if predicate:
+                        predicates.append(predicate)
                 elif planning_section:
-                    plan = parse_planning_line(line.strip())
-                    cleaned_plan = []
-                    for tpl in plan:
-                        if len(tpl) == 4:
-                            cleaned_plan.append((tpl[0], tpl[1], int(tpl[2]), tpl[3]))
-                        else:
-                            cleaned_plan.append((tpl[0],) + tpl[1:])
-                    planning.append(cleaned_plan)
+                    if line.strip() != "":
+                        plan = parse_planning_line(line.strip())
+                        cleaned_plan = []
+                        for tpl in plan:
+                            if len(tpl) == 4:
+                                cleaned_plan.append((tpl[0], tpl[1], int(tpl[2]), tpl[3]))
+                            else:
+                                cleaned_plan.append((tpl[0],) + tpl[1:])
+                        planning.append(cleaned_plan)
             
             result_dict[time] = {
                 "Intention": intention,
