@@ -50,7 +50,7 @@ os.chdir(dir_path)
 from habitat.gpt.prompts.prompt_intention_proposal import propose_intention
 from habitat.gpt.prompts.prompt_predicates_proposal import propose_predicates
 from habitat.gpt.prompts.prompt_motion_planning import plan_motion
-from habitat.gpt.prompts.utils import load_response, extract_useful_object, extract_words_before, extract_code
+from habitat.gpt.prompts.utils import load_response, extract_code
 
 
 @registry.register_task_action
@@ -419,8 +419,9 @@ def select_pick_place_obj(env, scene_id, pick_obj_idx, place_obj_idx):
     static_categories = ["storage_furniture", "support_furniture", "seating_furniture", "floor_covering", 
                          "sleeping_furniture", "bathroom_fixtures", "mirror",
                          "large_kitchen_appliance", "large_appliance", "kitchen_bathroom_fixture", 
-                         "vehicle", "heating_cooling", "medium_kitchen_appliance", "display"]
-    
+                         "vehicle", "heating_cooling", "medium_kitchen_appliance", "display", "arch", "curtain",
+                         "small_kitchen_appliance"]
+
     room_dict = map_rooms_to_bounds(semantics_file)
     obj_mapping = load_object_mapping(object_csv_path)
     with open(instance_file, 'r') as f: instance_data = json.load(f)
@@ -436,15 +437,13 @@ def select_pick_place_obj(env, scene_id, pick_obj_idx, place_obj_idx):
         print(handle, "id", aom.get_object_id_by_handle(handle))
 
     print("\nList of dynamic rigid objects:")
-    i = 0
     for handle, ro in rom.get_objects_by_handle_substring().items():
         if ro.awake:
             print(handle, "id", ro.object_id)
             template_name = handle.split('_:')[0]
             trans = (rom.get_object_by_id(ro.object_id)).translation
             actual_name = obj_mapping[template_name]['name'] if template_name in obj_mapping else handle
-            dynamic_obj_trans_dict[actual_name] = [i, trans]
-            i += 1
+            dynamic_obj_trans_dict[actual_name] = [ro.object_id, trans]
     
     static_obj_room_mapping = map_objects_to_rooms(static_obj_trans_dict, room_dict)
     dynamic_obj_room_mapping = map_objects_to_rooms(dynamic_obj_trans_dict, room_dict)
@@ -460,7 +459,7 @@ def select_pick_place_obj(env, scene_id, pick_obj_idx, place_obj_idx):
     return static_obj_trans_dict, dynamic_obj_trans_dict, static_obj_room_mapping, dynamic_obj_room_mapping, aom, rom
 
 
-def walk_and_pick(env, humanoid_controller, pick_object_trans):
+def walk_and_pick(env, humanoid_controller, pick_obj_id, pick_object_trans):
     # https://github.com/facebookresearch/habitat-lab/issues/1913
     humanoid_controller.reset(env.sim.agents_mgr[1].articulated_agent.base_transformation)  # This line is important
 
@@ -607,6 +606,7 @@ def customized_humanoid_motion(env, convert_helper, folder_dict, motion_pkl_path
         output_path=motion_npz_path.replace(".npz", ""),
         human_rot=env.sim.agents_mgr[1].articulated_agent.base_transformation,
         reverse=(motion_folder==npy_file_folder_list[0])
+        # reverse=False
     )
 
     # Because we want the humanoid controller to generate a motion relative to the current agent, we need to set the reference pose
@@ -657,19 +657,51 @@ def predicates_proposal_gpt4(scene_id, obj_room_mapping, conversation_hist, temp
     return conversation_hist
 
 
-def motion_planning_gpt4(scene_id, obj_room_mapping, conversation_hist, temperature_dict, model_dict, start_over=False):
-    output_dir = pathlib.Path(data_path) / "gpt4_response" / "prompts/predicates_proposal" / scene_id
+def motion_planning_gpt4(scene_id, motion_sets_list, obj_room_mapping, conversation_hist, temperature_dict, model_dict, start_over=False):
+    output_dir = pathlib.Path(data_path) / "gpt4_response" / "prompts/motion_planning" / scene_id
     os.makedirs(output_dir, exist_ok=True)
     
     if start_over:
-        user, res = propose_predicates(obj_room_mapping, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
+        user, res = plan_motion(motion_sets_list, obj_room_mapping, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
         time.sleep(20)
     else:
-        user, res = propose_predicates(obj_room_mapping, output_dir, existing_response=load_response("predicates_proposal", output_dir), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
+        user, res = plan_motion(motion_sets_list, obj_room_mapping, output_dir, existing_response=load_response("motion_planning", output_dir), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
     conversation_hist.append([user, res])
 
     return conversation_hist
     
+
+def execute_humanoid(env, extracted_planning, obj_room_mapping, obj_trans_dict):
+    static_obj_room_mapping, dynamic_obj_room_mapping = obj_room_mapping[0], obj_room_mapping[1]
+    static_obj_trans_dict, dynamic_obj_trans_dict = obj_trans_dict[0], obj_trans_dict[1]
+
+    for i, (time, details) in enumerate(extracted_planning.items()):
+        if i != 0: 
+            continue
+        env.reset()
+        planning = details["Planning"]
+        
+        for predicate_plan in planning:  # planning for each predicate
+            for step in predicate_plan:  # each motion
+                print("step done")
+                if step[0] == "motion":
+                    customized_humanoid_motion(env, convert_helper, folder_dict, get_motion_pkl_path(step[1], motion_dict))
+                else:
+                    obj_trans_dict_to_search = static_obj_trans_dict if step[3] == "static" else dynamic_obj_trans_dict  # only dynamic object can be picked or placed
+                    object_trans = None
+                    for name, (obj_id, trans) in obj_trans_dict_to_search.items():
+                        if obj_id == step[2]:
+                            object_trans = trans
+                            break
+       
+                    if step[0] == "walk":
+                        walk_to(env, humanoid_rearrange_controller, object_trans)
+                    elif step[0] == "walk_pick":
+                        walk_and_pick(env, humanoid_rearrange_controller, step[2], object_trans)
+                    elif step[0] == "walk_place":
+                        walk_to(env, humanoid_rearrange_controller, object_trans)
+                        move_hand_and_place(env, humanoid_rearrange_controller, step[2], object_trans)
+
 
 
 # export QT_QPA_PLATFORM=offscreen
@@ -691,15 +723,17 @@ if __name__ == "__main__":
     human_agent_config.articulated_agent_type = "KinematicHumanoid"
     human_agent_config.motion_data_path = os.path.join(data_path, "hab3_bench_assets/humanoids/female_0/female_0_motion_data_smplx.pkl")
     robot_agent_config.motion_data_path = os.path.join(data_path, "hab3_bench_assets/humanoids/female_0/female_0_motion_data_smplx.pkl")  # placeholder
+    humanoid_rearrange_controller = HumanoidRearrangeController(human_agent_config.motion_data_path)
 
     # Convert custom motion npy to npz
-    npy_file_folder_list = [os.path.join(data_path, "humanoids/humanoid_data/haa500_motion"),
+    npy_file_folder_list = [os.path.join(data_path, "humanoids/humanoid_data/haa500_motion"),  # Some motion makes the human upside down.
                             os.path.join(data_path, "humanoids/humanoid_data/humman_motion"),
                             os.path.join(data_path, "humanoids/humanoid_data/idea400_motion"),
                             os.path.join(data_path, "humanoids/humanoid_data/perform_motion")]
     motion_sets_list, motion_dict, folder_dict, convert_helper = create_motion_sets(npy_file_folder_list, urdf_path, update=True)
     print()
     print()
+    print(f"Motion List Size: {len(motion_sets_list)}")
     print(motion_sets_list)
     print()
 
@@ -762,11 +796,17 @@ if __name__ == "__main__":
       "code_generation": "gpt-4o"
     }
 
-    conversation_hist = intention_proposal_gpt4(scene_id, [static_obj_room_mapping, dynamic_obj_room_mapping], temperature_dict, model_dict, start_over=False)
+    conversation_hist = intention_proposal_gpt4(scene_id, [static_obj_room_mapping, dynamic_obj_room_mapping], temperature_dict, model_dict, start_over=True)
     conversation_hist = predicates_proposal_gpt4(scene_id, [static_obj_room_mapping, dynamic_obj_room_mapping], conversation_hist, temperature_dict, model_dict, start_over=True)
+    conversation_hist = motion_planning_gpt4(scene_id, motion_sets_list, [static_obj_room_mapping, dynamic_obj_room_mapping], conversation_hist, temperature_dict, model_dict, start_over=True)
 
-    # humanoid_rearrange_controller = HumanoidRearrangeController(human_agent_config.motion_data_path)
-    # walk_and_pick(env, humanoid_rearrange_controller, pick_object_trans)
+    extracted_planning = extract_code("motion_planning", pathlib.Path(data_path) / "gpt4_response" / "prompts/motion_planning" / scene_id)
+    print()
+    print(extracted_planning)
+    print()
+    execute_humanoid(env, extracted_planning, [static_obj_room_mapping, dynamic_obj_room_mapping], [static_obj_trans_dict, dynamic_obj_trans_dict])
+
+    # walk_and_pick(env, humanoid_rearrange_controller, pick_obj_id, pick_object_trans)
     # customized_humanoid_motion(env, convert_helper, folder_dict, get_motion_pkl_path(motion_sets_list[0], motion_dict))
     # walk_to(env, humanoid_rearrange_controller, place_object_trans)
     # move_hand_and_place(env, humanoid_rearrange_controller, place_obj_id, place_object_trans)

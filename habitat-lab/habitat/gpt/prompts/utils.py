@@ -80,51 +80,89 @@ def load_response(prompt_name, prompt_path, file_idx=None, get_latest=True):
 #     return ' '.join(words[:cutoff_index])
 
 
-def extract_code(prompt_name, prompt_path, video_path, img_id):
-    video_path.mkdir(parents=True, exist_ok=True)
+def parse_planning_line(line):
+    line = line.strip().lstrip('[').rstrip(']')
+    elements = line.split("), (")
+    parsed_elements = []
+
+    for element in elements:
+        element = element.replace("(", "").replace(")", "").replace("[", "").replace("]", "")
+        parts = element.split(", ")
+        parts = [p.strip().strip("'").strip() for p in parts]
+
+        # Determine if parts contain an object name with commas
+        if len(parts) > 4:
+            parts = [parts[0]] + [", ".join(parts[1:-2])] + parts[-2:]
+        
+        if len(parts) == 4:
+            parts[0] = parts[0].split(". ")[-1]  # Remove the index if present
+            parsed_elements.append((parts[0], parts[1], int(parts[2]), parts[3]))
+        else:
+            parts[0] = parts[0].split(". ")[-1]  # Remove the index if present
+            parsed_elements.append(tuple(parts))
+
+    return parsed_elements
+
+def extract_code(prompt_name, prompt_path, video_path=None, scene_id=None):
+    # Create the video path directory if it doesn't exist
+    # video_path.mkdir(parents=True, exist_ok=True)
+
     if prompt_path.exists():
-        subdirs = [d for d in os.listdir(prompt_path) if os.path.isdir(prompt_path / d)]
-        subdirs.sort()
+        json_file_path = load_response(prompt_name, prompt_path)
+        with open(json_file_path, 'r') as f:
+            json_data = json.load(f)
+        
+        # Initialize the dictionary
+        result_dict = {}
 
-        generated_codes = []
-        generated_tasks = []
-        video_filenames = []
+        # Extract the "res" field content
+        res_content = json_data["res"]
+        
+        # Split the content by time sections
+        time_sections = res_content.split("\n\nTime: ")
+        
+        for section in time_sections:
+            if section.strip() == "":
+                continue
 
-        for i, subdir in enumerate(subdirs):
-            json_file_path = prompt_path / subdir / f"{prompt_name}.json"
-            if json_file_path.exists():
-                with open(json_file_path, 'r') as f:
-                    json_data = json.load(f)
-                res_text = json_data["res"]
+            lines = section.split("\n")
+            time = lines[0].strip()  # Ensure 'Time: ' prefix is included
+            intention = lines[1].replace("Intention: ", "").strip()
+            
+            predicates = []
+            planning = []
+            predicate_section = False
+            planning_section = False
 
-                # Regular expression patterns
-                obj_idx_pattern = r"obj_idx = (\d+)"
-                motion_list_pattern = r"motion_list = \[((?:\s*\([^)]*\),?)+)\]"
-                task_pattern = r"Task Name: (.*?)\nDescription: (.*?)\n"
+            for line in lines[2:]:
+                if line.startswith("Predicates:"):
+                    predicate_section = True
+                    planning_section = False
+                    continue
+                elif line.startswith("Planning:") or line.startswith("Planning (corresponding to each predicate):"):
+                    planning_section = True
+                    predicate_section = False
+                    continue
+                
+                if predicate_section:
+                    predicate = line.strip()
+                    if predicate[0].isdigit() and predicate[1] == '.':
+                        predicate = predicate.split('. ', 1)[-1].strip()  # Remove index
+                    predicates.append(predicate)
+                elif planning_section:
+                    plan = parse_planning_line(line.strip())
+                    cleaned_plan = []
+                    for tpl in plan:
+                        if len(tpl) == 4:
+                            cleaned_plan.append((tpl[0], tpl[1], int(tpl[2]), tpl[3]))
+                        else:
+                            cleaned_plan.append((tpl[0],) + tpl[1:])
+                    planning.append(cleaned_plan)
+            
+            result_dict[time] = {
+                "Intention": intention,
+                "Predicates": predicates,
+                "Planning": planning
+            }
 
-                # Finding all matches for codes
-                obj_idx_matches = re.findall(obj_idx_pattern, res_text)
-                motion_list_matches = re.findall(motion_list_pattern, res_text, re.DOTALL)
-
-                # Finding all matches for tasks
-                task_matches = re.findall(task_pattern, res_text, re.DOTALL)
-
-                # Process and store code data
-                for obj_idx, motion_list_str in zip(obj_idx_matches, motion_list_matches):
-                    # Convert motion_list string to tuple
-                    motion_list = ast.literal_eval(f'[{motion_list_str}]')
-                    generated_codes.append((int(obj_idx), motion_list))
-
-                # Process and store task data
-                generated_tasks.extend(task_matches)
-
-            # Write to a .txt file
-            if task_matches:  # Check if there are tasks to write
-                for task in task_matches:
-                    txt_filename = f"task_{img_id}_obj_{i}_{task[0].replace(' ', '_')}.txt"
-                    video_filename = f"video_{img_id}_obj_{i}_{task[0].replace(' ', '_')}.mp4"
-                    video_filenames.append(video_filename)
-                    with open(video_path / txt_filename, 'w') as file:
-                        file.write(f"Task Name: {task[0]}\nDescription: {task[1]}\n")
-
-        return generated_codes, video_filenames
+        return result_dict

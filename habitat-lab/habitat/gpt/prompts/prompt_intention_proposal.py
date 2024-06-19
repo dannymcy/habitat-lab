@@ -14,12 +14,13 @@ def propose_intention_prompt(obj_room_mapping):
     1.	A dict mapping rigid, static objects to their IDs and rooms: {obj_room_mapping[0]}.
     2.	A dict mapping rigid, dynamic objects to their IDs and rooms: {obj_room_mapping[1]}.
 
-    You are a human living in the house. Propose your activities across a day (9am to 9pm) with two-hour intervals.
+    You are a human living in the house. Propose your activities across a day (9am to 9pm) with three-hour intervals.
 
     Constraints:
     1.	Activities must be diverse yet reasonable based on the house layout and available objects.
-    2.	Activities must be high-level (e.g., clean, leisure, organize).
-    3. 	All objects are rigid and cannot deform, disassemble, or transform.
+    2.	Activities must be high-level and either human-centric (e.g., hygiene, sport, leisure) or room-centric (e.g., clean, organize, set-up). Do not mention specific objects.
+    3.  Activities should be non-repetitive.
+    4. 	All objects are rigid and cannot deform, disassemble, or transform.
 
     Write in the following format. Do not output anything else:
     Time: xxx am/pm

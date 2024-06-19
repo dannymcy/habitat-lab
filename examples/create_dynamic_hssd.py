@@ -38,9 +38,10 @@ if __name__ == "__main__":
     # dynamic_categories = ['trashcan', 'decor', 'lighting', 'seating_furniture', 'dining_ware', 'plant', 'electronics'
     #                       'animate_object', 'apparel', 'liquid_container', 'kitchen_ware', 'tray',
     #                       'small_kitchen_appliance', 'bathroom_accessory', 'gym_equipment', 'toy', 'wearable']
-    dynamic_categories = ['trashcan', 'decor', 'lighting', 'dining_ware', 'plant', 'electronics',
-                          'animate_object', 'apparel', 'liquid_container', 'kitchen_ware', 'tray',
-                          'small_kitchen_appliance', 'bathroom_accessory', 'gym_equipment', 'toy', 'wearable']
+    # dynamic_categories = ['trashcan', 'decor', 'lighting', 'dining_ware', 'plant', 'electronics',
+    #                       'animate_object', 'apparel', 'liquid_container', 'kitchen_ware', 'tray',
+    #                       'small_kitchen_appliance', 'bathroom_accessory', 'gym_equipment', 'toy', 'wearable']
+    dynamic_categories = []
     static_categories = ["storage_furniture", "support_furniture", "seating_furniture", "floor_covering", 
                          "sleeping_furniture", "bathroom_fixtures", "mirror",
                          "large_kitchen_appliance", "large_appliance", "kitchen_bathroom_fixture", 

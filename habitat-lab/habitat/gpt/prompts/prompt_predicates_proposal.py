@@ -18,11 +18,12 @@ def propose_predicates_prompt(obj_room_mapping):
     You are a human living in the house. Break down your activities across a day into concrete predicates.
 
     Constraints:
-    1.  Break down each activity into several predicates.
-    2.  Predicates should be continuous and logical, if possible.
-    2.	Each predicate involves one object.
-    3.  Only dynamic objects can be moved, but you can interact with fixed, static objects.
-    4. 	All objects are rigid and cannot deform, disassemble, or transform.
+    1.  Break down each activity into several (2 to 5) predicates.
+    2.  Predicates should be continuous and logical.
+    3.	Each predicate involves one object or one human motion.
+    4.  ONLY INVOLVE OBJECT FROM STATIC AND DYNAMIC OBJECT DICTS. Do not introduce imaginary objects!
+    5.  Only dynamic objects can be moved, but you can interact with fixed, static objects.
+    6. 	All objects are rigid and cannot deform, disassemble, or transform.
 
     Write in the following format. Do not output anything else:
     Time: xxx am/pm
