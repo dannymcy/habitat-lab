@@ -720,7 +720,6 @@ def execute_humanoid(env, extracted_planning, obj_room_mapping, obj_trans_dict):
 
 
 # export QT_QPA_PLATFORM=offscreen
-# Github token: hp_cwuhmRHua5sNkR5iqyRfDifxsH8wkO3oPsOk
 if __name__ == "__main__":
     output_dir = os.path.join(data_path, "interactive_play_replays")
     os.makedirs(output_dir, exist_ok=True)
