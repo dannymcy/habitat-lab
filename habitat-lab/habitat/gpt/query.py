@@ -4,7 +4,10 @@ import time
 import json
 
 # key name: danny_mani_vid
-
+os.environ["OPENAI_API_KEY"] = ""  # put your api key here
+client = OpenAI(
+  api_key=os.environ['OPENAI_API_KEY'],  # this is also the default, it can be omitted
+)
 
 def query(system, user_contents, assistant_contents, save_path=None, model='gpt-4', temperature=1, debug=False):
     for user_content, assistant_content in zip(user_contents, assistant_contents):
