@@ -49,14 +49,14 @@ if __name__ == "__main__":
 
     # List of objects to make dynamic by their IDs
     # TODO: NaN is an important categort, containing many objects. Need to resolve this.
-    objects_to_make_dynamic = objects_df[
-        (objects_df['support'].isna() | (objects_df['support'] == "")) &
-        (objects_df['super_category'].isin(dynamic_categories) | objects_df['super_category'].isna())
-    ]['id'].tolist()
     # objects_to_make_dynamic = objects_df[
     #     (objects_df['support'].isna() | (objects_df['support'] == "")) &
-    #     (objects_df['super_category'].isin(dynamic_categories))
+    #     (objects_df['super_category'].isin(dynamic_categories) | objects_df['super_category'].isna())
     # ]['id'].tolist()
+    objects_to_make_dynamic = objects_df[
+        (objects_df['support'].isna() | (objects_df['support'] == "")) &
+        (objects_df['super_category'].isin(dynamic_categories))
+    ]['id'].tolist()
 
     scene_dir = 'data/hab3_bench_assets/hab3-hssd/scenes_all_static'
     output_dir = 'data/hab3_bench_assets/hab3-hssd/scenes'

@@ -8,48 +8,55 @@ from habitat.gpt.prompts.utils import *
 from habitat.gpt.query import query
 
 
-def propose_predicates_prompt(motion_sets_list, obj_room_mapping):
+def propose_predicates_prompt(time_, obj_room_mapping):
     contents = f"""
     Input:
-    1.	A human motion list: {motion_sets_list}
+    1.  The proposed activity at time: {time_}.
     2.	A dict mapping rigid, static objects to their IDs and rooms: {obj_room_mapping[0]}.
     3.	A dict mapping rigid, dynamic objects to their IDs and rooms: {obj_room_mapping[1]}.
-    4.  The proposed activities across a day.
 
-    You are a human living in the house. Break down your activity at 9pm into concrete predicates.
+    You are a human living in the house.
 
-    Constraints:
-    1.  Break down the activity into several (2 to 5) predicates.
-    2.  Predicates should be continuous and logical.
-    3.	Each predicate involves one object and motions. Motions include hand motion (pick/place/pick and place/none) and one human motion from the list to do the predicate.
-    4.  ONLY USE MOTION FROM HUMAN MOTION LIST AND OBJECT FROM STATIC AND DYNAMIC OBJECT DICTS. Do not introduce imaginary motion or objects!
-    5.  Only dynamic objects can be picked/placed, but you can interact with fixed, static objects.
-    6. 	All objects are rigid and cannot deform, disassemble, or transform.
+    Instructions:
+    1.  Break down the activity into several (2 to 5) predicates, tracking any picked object in hand at each step.
+    2.	Predicate types:
+        - Type 1: Creative, reasonable free-form human motion interacting with a fixed, static object (static objects cannot be moved)
+        - Type 2: Pick a dynamic object
+        - Type 3: Place the picked dynamic object at the place of the target object
+    3.  Use only objects from the given static and dynamic object dicts.
+    4.  Predicates should be continuous and logical.
+    5.  Start with no object in hand. Objects picked must be placed before picking another.
+    6.  Free-form motion can be conducted with picked object in hand. Type 1 predicate should be diverse and the majority of the predicates.
+    7. 	All objects are rigid and cannot deform, disassemble, or transform.
 
     Write in the following format. Do not output anything else:
     Time: xxx am/pm
     Intention: basic descriptions.
     Predicates: 
-    1. obj_id: real int. obj_name: xxx. type: static/dynamic. motion: yyy. hand_motion: pick/place/none. basic descriptions involving objects and motions.
+    1. Thought: basic descriptions. Act: [type: 1/2/3, obj_id: real int, obj_name: xxx, property: static/dynamic, motion: free-form motion/pick/place]
     2. ...
+    Tracking: none or obj_id (real int) in a list, with length equal to the number of predicates.
 
     Examples:
     Predicates: 
-    1. obj_id: real int. obj_name: cup. type: static/dynamic. motion: drink. hand_motion: pick and place. Pick up the cup to drink and place it.
+    1. Thought: Pick up the cup. Act: [type: 2, obj_id: cup_id (real int), obj_name: cup, property: dynamic, motion: pick]
+    2. Thought: Drink the water in the cup. Act: [type: 1, obj_id: cup_id (real int), obj_name: cup, property: dynamic, motion: drink_water]
+    3. Thought: Place the cup on the table. Act: [type: 3, obj_id: table_id (real int), obj_name: table, property: static, motion: place]
+    Tracking: [cup_id, cup_id, none]
     """
     return contents
 
 
-def propose_predicates(motion_sets_list, obj_room_mapping, output_path, existing_response=None, temperature_dict=None, 
+def propose_predicates(time_, obj_room_mapping, output_path, existing_response=None, temperature_dict=None, 
                   model_dict=None, conversation_hist=None):
 
-    predicates_user_contents_filled = propose_predicates_prompt(motion_sets_list, obj_room_mapping)
+    predicates_user_contents_filled = propose_predicates_prompt(time_, obj_room_mapping)
 
     if existing_response is None:
         system = "You are a helpful assistant."
         ts = time.time()
         time_string = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d-%H-%M-%S')
-        save_folder = output_path / time_string
+        save_folder = output_path / (time_ + "_" + time_string)
         save_folder.mkdir(parents=True, exist_ok=True)
         save_path = str(save_folder) + "/predicates_proposal.json"
 

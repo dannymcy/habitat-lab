@@ -8,40 +8,51 @@ from habitat.gpt.prompts.utils import *
 from habitat.gpt.query import query
 
 
-def reflect_predicates_prompt(motion_sets_list, obj_room_mapping):
+def reflect_predicates_prompt(time_, obj_room_mapping):
     contents = f"""
     Input:
-    1.	A human motion list: {motion_sets_list}
+    1.  The proposed activity at time: {time_}.
     2.	A dict mapping rigid, static objects to their IDs and rooms: {obj_room_mapping[0]}.
     3.	A dict mapping rigid, dynamic objects to their IDs and rooms: {obj_room_mapping[1]}.
-    4.  The proposed activities and predicates across a day.
 
-    Your task is to check if the following constraints are strictly followed in each predicate at 9pm, and revise.
+    Your task is to check if the instructions are strictly followed in each predicate, and revise to make better if necessary.
 
-    Constraints:
-    1.  ONLY USE MOTION HUMAN MOTION LIST (exact wording). Do not introduce imaginary motion!
-    2.  ONLY USE OBJECT FROM STATIC AND DYNAMIC OBJECT DICTS (exact wording and ID). Do not introduce imaginary objects!
+    Instructions:
+    1.  Break down the activity into several (2 to 5) predicates, tracking any picked object in hand at each step.
+    2.	Predicate types:
+        - Type 1: Creative, reasonable free-form human motion interacting with a fixed, static object (static objects cannot be moved)
+        - Type 2: Pick a dynamic object
+        - Type 3: Place the picked dynamic object at the place of the target object
+    3.  Use only objects from the given static and dynamic object dicts.
+    4.  Predicates should be continuous and logical.
+    5.  Start with no object in hand. Objects picked must be placed before picking another.
+    6.  Free-form motion can be conducted with picked object in hand. Type 1 predicate should be diverse and the majority of the predicates.
+    7. 	All objects are rigid and cannot deform, disassemble, or transform.
 
     Write in the following format. Do not output anything else:
     Time: xxx am/pm
     Intention: basic descriptions.
-    Predicates: 
-    1. obj_id: real int. obj_name: xxx. type: static/dynamic. motion: yyy. hand_motion: pick/place/none. basic descriptions involving objects and motions.
+    Reflect Predicates: 
+    1. no mistake or the mistake found.
     2. ...
+    Revised Predicates: 
+    1. Thought: basic descriptions. Act: [type: 1/2/3, obj_id: real int, obj_name: xxx, property: static/dynamic, motion: free-form motion/pick/place]
+    2. ...
+    Tracking: none or obj_id (real int) in a list, with length equal to the number of predicates.
     """
     return contents
 
 
-def reflect_predicates(motion_sets_list, obj_room_mapping, output_path, existing_response=None, temperature_dict=None, 
+def reflect_predicates(time_, obj_room_mapping, output_path, existing_response=None, temperature_dict=None, 
                   model_dict=None, conversation_hist=None):
 
-    predicates_user_contents_filled = reflect_predicates_prompt(motion_sets_list, obj_room_mapping)
+    predicates_user_contents_filled = reflect_predicates_prompt(time_, obj_room_mapping)
 
     if existing_response is None:
         system = "You are a helpful assistant."
         ts = time.time()
         time_string = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d-%H-%M-%S')
-        save_folder = output_path / time_string
+        save_folder = output_path / (time_ + "_" + time_string)
         save_folder.mkdir(parents=True, exist_ok=True)
         save_path = str(save_folder) + "/predicates_reflection.json"
 

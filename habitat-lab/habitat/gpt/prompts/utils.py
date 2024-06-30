@@ -80,6 +80,32 @@ def load_response(prompt_name, prompt_path, file_idx=None, get_latest=True):
 #     return ' '.join(words[:cutoff_index])
 
 
+def extract_times(conversation_hist):
+    """
+    Extract the times from the conversation history.
+    """
+    times = []
+    lines = conversation_hist.split("\n")
+    for i in range(len(lines)):
+        if lines[i].startswith("Time:"):
+            time = lines[i].replace("Time:", "").strip()
+            times.append(time)
+    return times
+
+
+def extract_intentions(conversation_hist):
+    """
+    Extract the intention sentences from the conversation history.
+    """
+    intentions = []
+    lines = conversation_hist.split("\n")
+    for i in range(len(lines)):
+        if lines[i].startswith("Intention:"):
+            intention = lines[i].replace("Intention:", "").strip()
+            intentions.append(intention)
+    return intentions
+
+
 def parse_planning_line(line):
     line = line.strip().lstrip('[').rstrip(']')
     elements = line.split("), (")

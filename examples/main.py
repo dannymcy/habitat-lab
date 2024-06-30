@@ -51,7 +51,9 @@ from habitat.gpt.prompts.prompt_intention_proposal import propose_intention
 from habitat.gpt.prompts.prompt_predicates_proposal import propose_predicates
 from habitat.gpt.prompts.prompt_predicates_reflection import reflect_predicates
 from habitat.gpt.prompts.prompt_motion_planning import plan_motion
-from habitat.gpt.prompts.utils import load_response, extract_code
+from habitat.gpt.prompts.utils import load_response, extract_times, extract_intentions, extract_code
+
+from sentence_transformers import SentenceTransformer
 
 
 @registry.register_task_action
@@ -364,8 +366,10 @@ def create_static_obj_trans_dict(instance_file, object_mapping, static_categorie
         template_name = obj['template_name']
         if template_name in object_mapping:
             actual_name = object_mapping[template_name]['name']
+            if pd.isna(actual_name): actual_name = object_mapping[template_name]['wnsynsetkey']
             super_category = object_mapping[template_name]['super_category']
-            if super_category in static_categories:
+            # if super_category in static_categories:
+            if True:
                 translation = obj['translation']
                 object_translation_dict[actual_name] = [i, mn.Vector3(translation)]
                 i += 1
@@ -381,6 +385,7 @@ def load_object_mapping(csv_path):
     for _, row in objects_df.iterrows():
         object_mapping[row['id']] = {
             'name': row['name'],
+            'wnsynsetkey': row['wnsynsetkey'],
             'super_category': row['super_category']
         }
     return object_mapping
@@ -398,17 +403,49 @@ def map_objects_to_rooms(object_trans_dict, room_bounds_mapping):
             min_bounds = bounds["min_bounds"]
             max_bounds = bounds["max_bounds"]
             
+            # TODO: archs such as doors and windows cannot be mapped to rooms
             if (min_bounds[0] <= object_translation[0] <= max_bounds[0] and
                 # min_bounds[1] <= object_translation[1] <= max_bounds[1] and  # height is ignored
                 min_bounds[2] <= object_translation[2] <= max_bounds[2]):
                 return room
         return None
 
+    def find_closest_room(object_translation, room_bounds_mapping):
+        """
+        Find the closest room to the object based on its translation.
+        """
+        closest_room = None
+        min_distance = float('inf')
+
+        for room, bounds in room_bounds_mapping.items():
+            min_bounds = bounds["min_bounds"]
+            max_bounds = bounds["max_bounds"]
+            distance = 0
+
+            # Calculate distance to the nearest boundary on each axis
+            for i in range(3):
+                if object_translation[i] < min_bounds[i]:
+                    distance += (min_bounds[i] - object_translation[i]) ** 2
+                elif object_translation[i] > max_bounds[i]:
+                    distance += (object_translation[i] - max_bounds[i]) ** 2
+
+            distance = distance ** 0.5
+            if distance < min_distance:
+                min_distance = distance
+                closest_room = room
+
+        return closest_room
+    
     obj_room_mapping = {}
     for obj_name, translation in object_trans_dict.items():
         room = get_room_for_object(translation[1], room_bounds_mapping)
         if room:
             obj_room_mapping[obj_name] = [translation[0], room]
+        else:
+            closest_room = find_closest_room(translation[1], room_bounds_mapping)
+            if closest_room:
+                obj_room_mapping[obj_name] = [translation[0], closest_room]
+    
     return obj_room_mapping
 
 
@@ -457,47 +494,12 @@ def select_pick_place_obj(env, scene_id, pick_obj_idx, place_obj_idx):
     pick_object_trans = pick_object.translation
     place_object_trans = place_object.translation
 
-    return static_obj_trans_dict, dynamic_obj_trans_dict, static_obj_room_mapping, dynamic_obj_room_mapping, aom, rom
+    return room_dict, static_obj_trans_dict, dynamic_obj_trans_dict, static_obj_room_mapping, dynamic_obj_room_mapping, aom, rom
 
 
-def walk_and_pick(env, humanoid_controller, pick_obj_id, pick_object_trans):
+def pick_up(env, humanoid_controller, pick_obj_id, pick_object_trans):
     # https://github.com/facebookresearch/habitat-lab/issues/1913
     humanoid_controller.reset(env.sim.agents_mgr[1].articulated_agent.base_transformation)  # This line is important
-
-    # Walk towards the object to pick
-    agent_displ = np.inf
-    agent_rot = np.inf
-    prev_rot = env.sim.agents_mgr[1].articulated_agent.base_rot
-    prev_pos = env.sim.agents_mgr[1].articulated_agent.base_pos
-    while agent_displ > 1e-9 or agent_rot > 1e-9:
-        prev_rot = env.sim.agents_mgr[1].articulated_agent.base_rot
-        prev_pos = env.sim.agents_mgr[1].articulated_agent.base_pos
-        # TODO: in action_dict, the order of agent_1_humanoid_navigate_action" and agent_0_oracle_coord_action matter, or will cause error, but sometimes changes the order still cannot solve the error
-        # pick and place object IDs (target location) affect the behavior
-        # the reason is in habitat/tasks/rearrange/actions/oracle_nav_action: step, _get_target_for_coord --> habitat/tasks/rearrange/utils: place_agent_at_dist_from_pos, _get_robot_spawns; agent is in collision with the scene
-        # _get_robot_spawns is modified to avoid this, but a bit dirty
-        action_dict = {
-            "action": ("agent_1_humanoid_navigate_action", "agent_0_oracle_coord_action"),  
-            "action_args": {
-                "agent_1_oracle_nav_lookat_action": pick_object_trans,
-                "agent_1_mode": 1,
-                "agent_0_oracle_nav_lookat_action": prev_pos,
-                "agent_0_mode": 1
-            }
-        }
-        observations.append(env.step(action_dict))
-        
-        cur_rot = env.sim.agents_mgr[1].articulated_agent.base_rot
-        cur_pos = env.sim.agents_mgr[1].articulated_agent.base_pos
-        agent_displ = (cur_pos - prev_pos).length()
-        agent_rot = np.abs(cur_rot - prev_rot)
-
-    # Wait
-    for _ in range(20):
-        action_dict = {"action": (), "action_args": {}}
-        observations.append(env.step(action_dict))
-
-    # Pick
     for _ in range(100):
         action_dict = {"action": ("agent_1_humanoid_pick_obj_id_action"), "action_args": {"agent_1_humanoid_pick_obj_id": pick_obj_id}}
         observations.append(env.step(action_dict)) 
@@ -629,45 +631,106 @@ def customized_humanoid_motion(env, convert_helper, folder_dict, motion_pkl_path
         observations.append(env.step(action_dict))
 
 
-def intention_proposal_gpt4(scene_id, obj_room_mapping, temperature_dict, model_dict, start_over=False):
+def intention_proposal_gpt4(scene_id, room_list, temperature_dict, model_dict, start_over=False):
     output_dir = pathlib.Path(data_path) / "gpt4_response" / "prompts/intention_proposal" / scene_id
     os.makedirs(output_dir, exist_ok=True)
     conversation_hist = []
 
     if start_over:
-        user, res = propose_intention(obj_room_mapping, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=None)
+        user, res = propose_intention(room_list, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=None)
         time.sleep(20)
     else:
-        user, res = propose_intention(obj_room_mapping, output_dir, existing_response=load_response("intention_proposal", output_dir), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=None)
+        user, res = propose_intention(room_list, output_dir, existing_response=load_response("intention_proposal", output_dir), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=None)
     conversation_hist.append([user, res])
 
     return conversation_hist
 
 
-def predicates_proposal_gpt4(scene_id, motion_sets_list, obj_room_mapping, conversation_hist, temperature_dict, model_dict, start_over=False):
+def sample_obj_by_similarity(conversation_hist, object_dict, top_k=30):
+    """
+    Extract intentions from conversation history and compute similarity scores with object names.
+    """
+    def compute_similarity(intention_sentences, object_dict):
+        """
+        Compute semantic similarity between intention sentences and object names.
+        """
+        model = SentenceTransformer("all-MiniLM-L6-v2")
+        
+        # Get object names with rooms
+        object_names = [f"{name} in {data[1]}" for name, data in object_dict.items()]
+        
+        # Encode sentences
+        intention_embeddings = model.encode(intention_sentences)
+        object_embeddings = model.encode(object_names)
+        
+        # Compute similarities
+        similarities = model.similarity(intention_embeddings, object_embeddings)
+        return similarities
+
+    # Extract times and intentions
+    times = extract_times(conversation_hist[0][1])
+    intention_sentences = extract_intentions(conversation_hist[0][1])
+    
+    # Compute similarity
+    similarities = compute_similarity(intention_sentences, object_dict)
+    # print()
+    # print(similarities)
+    # print()
+    
+    # Sample top K objects for each intention
+    sampled_objects_dict_list = []
+    object_names = list(object_dict.keys())
+
+    for sim in similarities:
+        top_indices = np.argsort(-sim)[:top_k]  # Get indices of top K similarities
+        sampled_objects = {object_names[idx]: object_dict[object_names[idx]] for idx in top_indices}
+        sampled_objects_dict_list.append(sampled_objects)
+        print(sampled_objects)
+        print()
+
+    return times, intention_sentences, sampled_objects_dict_list
+
+
+def predicates_proposal_gpt4(scene_id, times, sampled_static_obj_dict_list, dynamic_obj_room_mapping, conversation_hist, temperature_dict, model_dict, start_over=False):
     output_dir = pathlib.Path(data_path) / "gpt4_response" / "prompts/predicates_proposal" / scene_id
     os.makedirs(output_dir, exist_ok=True)
     
-    if start_over:
-        user, res = propose_predicates(motion_sets_list, obj_room_mapping, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
-        time.sleep(20)
-    else:
-        user, res = propose_predicates(motion_sets_list, obj_room_mapping, output_dir, existing_response=load_response("predicates_proposal", output_dir), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
-    conversation_hist.append([user, res])
+    for i, time_ in enumerate(times):
+        if start_over:
+            user, res = propose_predicates(time_, [sampled_static_obj_dict_list[i], dynamic_obj_room_mapping], output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
+            time.sleep(20)
+        else:
+            user, res = propose_predicates(time_, [sampled_static_obj_dict_list[i], dynamic_obj_room_mapping], output_dir, existing_response=load_response("predicates_proposal", output_dir), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
 
     return conversation_hist
 
 
-def predicates_reflection_gpt4(scene_id, motion_sets_list, obj_room_mapping, conversation_hist, temperature_dict, model_dict, start_over=False):
+def predicates_reflection_gpt4(scene_id, times, sampled_static_obj_dict_list, dynamic_obj_room_mapping, conversation_hist, temperature_dict, model_dict, start_over=False):
     output_dir = pathlib.Path(data_path) / "gpt4_response" / "prompts/predicates_reflection" / scene_id
     os.makedirs(output_dir, exist_ok=True)
-    
-    if start_over:
-        user, res = reflect_predicates(motion_sets_list, obj_room_mapping, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
-        time.sleep(20)
-    else:
-        user, res = reflect_predicates(motion_sets_list, obj_room_mapping, output_dir, existing_response=load_response("predicates_reflection", output_dir), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
-    conversation_hist.append([user, res])
+
+    predicates_proposal_path = pathlib.Path(data_path) / "gpt4_response" / "prompts/predicates_proposal" / scene_id
+    subdirs = [d for d in os.listdir(predicates_proposal_path) if os.path.isdir(predicates_proposal_path / d)]
+    subdirs.sort()
+
+    for i, time_ in enumerate(times):
+        for subdir in subdirs:
+            if time_ in subdir:
+                correct_subdir = subdir
+        json_file_path = predicates_proposal_path / correct_subdir / "predicates_proposal.json"
+        with open(json_file_path, 'r') as f:
+            json_data = json.load(f)
+            user = json_data["user"]
+            res = json_data["res"]
+        conversation_hist.append([user, res])
+
+        if start_over:
+            user, res = reflect_predicates(time_, [sampled_static_obj_dict_list[i], dynamic_obj_room_mapping], output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
+            time.sleep(20)
+        else:
+            user, res = reflect_predicates(time_, [sampled_static_obj_dict_list[i], dynamic_obj_room_mapping], output_dir, existing_response=load_response("predicates_reflection", output_dir), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
+        
+        conversation_hist = conversation_hist[:-1]
 
     return conversation_hist
 
@@ -780,7 +843,13 @@ if __name__ == "__main__":
     env.reset()
     observations = []
     # set_agents_base_pos(env, mn.Vector3(0, 0.180179, 0), mn.Vector3(0, 0.180179, 0))
-    static_obj_trans_dict, dynamic_obj_trans_dict, static_obj_room_mapping, dynamic_obj_room_mapping, aom, rom = select_pick_place_obj(env, scene_id, 0, 0)
+    room_dict, static_obj_trans_dict, dynamic_obj_trans_dict, static_obj_room_mapping, dynamic_obj_room_mapping, aom, rom = select_pick_place_obj(env, scene_id, 0, 0)
+    room_list = list(room_dict.keys())
+
+    print()
+    print(room_list)
+    print()
+    print(room_dict)
     print()
     print(f"Static Object Translation Dict Size: {len(static_obj_trans_dict)}")
     print(static_obj_trans_dict)
@@ -797,11 +866,11 @@ if __name__ == "__main__":
 
     # Communicating to ChatGPT-4 API
     temperature_dict = {
-      "intention_proposal": 0.2,
-      "predicates_proposal": 0.2,
-      "predicates_reflection": 0.2,
-      "motion_planning": 0.2,
-      "code_generation": 0.2
+      "intention_proposal": 0.7,
+      "predicates_proposal": 0.7,
+      "predicates_reflection": 0.3,
+      "motion_planning": 0.3,
+      "code_generation": 0.3
     }
     # GPT-4 1106-preview is GPT-4 Turbo (https://openai.com/pricing)
     model_dict = {
@@ -812,24 +881,17 @@ if __name__ == "__main__":
       "code_generation": "gpt-4o"
     }
 
-    conversation_hist = intention_proposal_gpt4(scene_id, [static_obj_room_mapping, dynamic_obj_room_mapping], temperature_dict, model_dict, start_over=False)
-    conversation_hist = predicates_proposal_gpt4(scene_id, motion_sets_list, [static_obj_room_mapping, dynamic_obj_room_mapping], conversation_hist, temperature_dict, model_dict, start_over=False)
-    conversation_hist = predicates_reflection_gpt4(scene_id, motion_sets_list, [static_obj_room_mapping, dynamic_obj_room_mapping], conversation_hist, temperature_dict, model_dict, start_over=False)
-    conversation_hist = motion_planning_gpt4(scene_id, motion_sets_list, [static_obj_room_mapping, dynamic_obj_room_mapping], conversation_hist, temperature_dict, model_dict, start_over=False)
+    conversation_hist = intention_proposal_gpt4(scene_id, room_list, temperature_dict, model_dict, start_over=False)
+    times, intention_sentences, sampled_static_obj_dict_list = sample_obj_by_similarity(conversation_hist, static_obj_room_mapping, top_k=30)
 
-    extracted_planning = extract_code("motion_planning", pathlib.Path(data_path) / "gpt4_response" / "prompts/motion_planning" / scene_id)
-    print()
-    print(extracted_planning)
-    print()
-    execute_humanoid(env, extracted_planning, [static_obj_room_mapping, dynamic_obj_room_mapping], [static_obj_trans_dict, dynamic_obj_trans_dict])
+    conversation_hist = predicates_proposal_gpt4(scene_id, times, sampled_static_obj_dict_list, dynamic_obj_room_mapping, conversation_hist, temperature_dict, model_dict, start_over=True)
+    # conversation_hist = predicates_reflection_gpt4(scene_id, times, sampled_static_obj_dict_list, dynamic_obj_room_mapping, conversation_hist, temperature_dict, model_dict, start_over=True)
+    # conversation_hist = motion_planning_gpt4(scene_id, motion_sets_list, [static_obj_room_mapping, dynamic_obj_room_mapping], conversation_hist, temperature_dict, model_dict, start_over=False)
 
-    # walk_and_pick(env, humanoid_rearrange_controller, pick_obj_id, pick_object_trans)
-    # customized_humanoid_motion(env, convert_helper, folder_dict, get_motion_pkl_path(motion_sets_list[0], motion_dict))
-    # walk_to(env, humanoid_rearrange_controller, place_object_trans)
-    # move_hand_and_place(env, humanoid_rearrange_controller, place_obj_id, place_object_trans)
-    # customized_humanoid_motion(env, convert_helper, folder_dict, get_motion_pkl_path('The_squat_1_clip1', motion_dict))
-    # customized_humanoid_motion(env, convert_helper, folder_dict, get_motion_pkl_path('after_getting_drunk_v2_clip2', motion_dict))
-    # customized_humanoid_motion(env, convert_helper, folder_dict, get_motion_pkl_path('Mopping_the_floor_and_walking_at_the_same_time_clip1', motion_dict))
-    # customized_humanoid_motion(env, convert_helper, folder_dict, get_motion_pkl_path('dance_1_clip1', motion_dict))
+    # extracted_planning = extract_code("motion_planning", pathlib.Path(data_path) / "gpt4_response" / "prompts/motion_planning" / scene_id)
+    # print()
+    # print(extracted_planning)
+    # print()
+    # execute_humanoid(env, extracted_planning, [static_obj_room_mapping, dynamic_obj_room_mapping], [static_obj_trans_dict, dynamic_obj_trans_dict])
     
     make_videos(output_dir)

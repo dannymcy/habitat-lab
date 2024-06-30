@@ -8,11 +8,10 @@ from habitat.gpt.prompts.utils import *
 from habitat.gpt.query import query
 
 
-def propose_intention_prompt(obj_room_mapping):
+def propose_intention_prompt(room_list):
     contents = f"""
     Input:
-    1.	A dict mapping rigid, static objects to their IDs and rooms: {obj_room_mapping[0]}.
-    2.	A dict mapping rigid, dynamic objects to their IDs and rooms: {obj_room_mapping[1]}.
+    1.	A list of rooms in the house (ignore small spaces like closets): {room_list}.
 
     You are an athletic human living in the house. Propose your activities across a day (9am to 9pm) with three-hour intervals.
 
@@ -29,10 +28,10 @@ def propose_intention_prompt(obj_room_mapping):
     return contents
 
 
-def propose_intention(obj_room_mapping, output_path, existing_response=None, temperature_dict=None, 
+def propose_intention(room_list, output_path, existing_response=None, temperature_dict=None, 
                   model_dict=None, conversation_hist=None):
 
-    intention_user_contents_filled = propose_intention_prompt(obj_room_mapping)
+    intention_user_contents_filled = propose_intention_prompt(room_list)
 
     if existing_response is None:
         system = "You are a helpful assistant."
