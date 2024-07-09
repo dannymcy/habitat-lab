@@ -300,7 +300,11 @@ def get_arg_parser():
     parser.add_argument(
         "--out",
         type=str,
+<<<<<<< HEAD
         default="data/hab3_bench_assets/episode_datasets/scene_id.json.gz",
+=======
+        default=None,
+>>>>>>> upstream/main
         help="Relative path to output generated RearrangeEpisodeDataset.",
     )
 
@@ -394,7 +398,6 @@ if __name__ == "__main__":
 
     # merge the configuration from file with the default
     cfg = get_config_defaults()
-
     logger.info(f"\n\nOriginal Config:\n{cfg}")
     if args.config is not None:
         assert osp.exists(

@@ -184,7 +184,12 @@ def get_bb_for_object_id(
             f"object id {obj_id} is not found, this is unexpected. Invalid/stale object id?"
         )
 
+<<<<<<< HEAD
     if isinstance(obj, habitat_sim.physics.ManagedRigidObject):
+=======
+    if not obj.is_articulated:
+        # rigid object
+>>>>>>> upstream/main
         return (obj.root_scene_node.cumulative_bb, obj.transformation)
 
     # ManagedArticulatedObject
@@ -908,7 +913,8 @@ def get_global_keypoints_from_object_id(
 
     obj = get_obj_from_id(sim, object_id, ao_link_map)
 
-    if isinstance(obj, habitat_sim.physics.ManagedBulletRigidObject):
+    if not obj.is_articulated:
+        # rigid object
         return get_rigid_object_global_keypoints(obj)
     elif obj.object_id != object_id:
         # this is an ArticulatedLink
@@ -1162,8 +1168,13 @@ def on_floor(
     :return: Whether or not the object is considered "on the floor" given the configuration.
     """
 
+<<<<<<< HEAD
     assert isinstance(
         object_a, habitat_sim.physics.ManagedRigidObject
+=======
+    assert (
+        not object_a.is_articulated
+>>>>>>> upstream/main
     ), "Object must be ManagedRigidObject, not implemented for ArticulatedObjects or links."
 
     if alt_pathfinder is None:
