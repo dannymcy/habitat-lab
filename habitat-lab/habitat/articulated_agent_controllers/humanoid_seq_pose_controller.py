@@ -69,7 +69,7 @@ class HumanoidSeqPoseController(HumanoidBaseController):
         """Sets the current pose to the base transformation, making the rest of poses are relative to this one"""
         self.base_transform_offset = mn.Matrix4()
         self.base_transform_offset.translation = (
-            -base_transformation.translation + self.base_offset
+            -base_transformation.translation + mn.Vector3(*self.base_offset)
         )
 
         self.calculate_pose()
