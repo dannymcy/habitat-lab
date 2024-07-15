@@ -194,7 +194,7 @@ def parse_act_line(line):
     act_content = line[act_start:act_end]
     
     # Define the expected keys in the order they appear
-    keys = ["type", "obj_id", "obj_name", "property", "motion"]
+    keys = ["type", "inter_obj_id", "inter_obj_name", "inhand_obj_name", "motion"]
     act_parts_cleaned = []
     
     for key in keys:

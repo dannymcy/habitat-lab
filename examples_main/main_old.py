@@ -639,7 +639,7 @@ def execute_humanoid(env, extracted_planning, motion_sets_list, obj_room_mapping
 
     for i, step in enumerate(planning):  # planning for each predicate
         if i != 0: continue
-        obj_trans_dict_to_search = static_obj_trans_dict  # only dynamic object can be picked or placed
+        obj_trans_dict_to_search = static_obj_trans_dict if step[3] == "static" else dynamic_obj_trans_dict  # only dynamic object can be picked or placed
         object_trans = None
         for name, (obj_id, trans) in obj_trans_dict_to_search.items():
             if obj_id == step[1]:
@@ -830,7 +830,7 @@ if __name__ == "__main__":
 
 
     human_conversation_hist = predicates_proposal_gpt4(data_path, scene_id, times, sampled_motion_list, sampled_static_obj_dict_list, dynamic_obj_room_mapping, profile_string_partial, human_conversation_hist, temperature_dict, model_dict, start_over=False)
-    human_conversation_hist = predicates_reflection_gpt4(data_path, scene_id, times, sampled_motion_list, sampled_static_obj_dict_list, dynamic_obj_room_mapping, profile_string_partial, human_conversation_hist, temperature_dict, model_dict, start_over=False)
+    human_conversation_hist = predicates_reflection_gpt4(data_path, scene_id, times, sampled_motion_list, sampled_static_obj_dict_list, dynamic_obj_room_mapping,human_conversation_hist, temperature_dict, model_dict, start_over=False)
     #human_conversation_hist = motion_planning_gpt4(data_path, scene_id, motion_sets_list, [static_obj_room_mapping, dynamic_obj_room_mapping],human_conversation_hist, temperature_dict, model_dict, start_over=False)
 
 
@@ -839,7 +839,7 @@ if __name__ == "__main__":
         if time_ == selected_time:
             break
     
-    extracted_planning = extract_code("predicates_reflection", pathlib.Path(data_path) / "gpt4_response" / "human/predicates_reflection" / scene_id, i+5)
+    extracted_planning = extract_code("predicates_reflection", pathlib.Path(data_path) / "gpt4_response" / "human/predicates_reflection" / scene_id, i)
 
     execute_humanoid(env, extracted_planning, motion_sets_list, [static_obj_room_mapping, dynamic_obj_room_mapping], [static_obj_trans_dict, dynamic_obj_trans_dict])
     

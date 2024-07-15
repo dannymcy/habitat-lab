@@ -1656,8 +1656,8 @@ class ThirdRGBSensorConfig(HabitatSimRGBSensorConfig):
 @dataclass
 class TopRGBSensorConfig(HabitatSimRGBSensorConfig):
     uuid: str = "top_rgb"
-    width: int = 1024
-    height: int = 768
+    width: int = 512
+    height: int = 384
     position: List[float] = field(default_factory=lambda: [3.3, 8.0, 2.8])
     orientation: List[float] = field(default_factory=lambda: [-1.57, 1.57, 0.0])
 

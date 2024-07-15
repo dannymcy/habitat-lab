@@ -8,30 +8,33 @@ from habitat.gpt.prompts.utils import *
 from habitat.gpt.query import query
 
 
-def propose_intention_prompt(room_list):
+def propose_intention_prompt(room_list, profile_string):
     contents = f"""
     Input:
     1.	A list of rooms in the house (ignore small spaces like closets): {room_list}.
+    2.  Your human profile (ignore any information about dating partner): {profile_string}.
 
-    You are an athletic human living in the house. Propose your activities across a day (9am to 9pm) with three-hour intervals.
+    You are a human living in the house.
+    Propose your activities across a day (9am to 9pm) with three-hour intervals.
 
     Constraints:
-    1.	Activities must be diverse yet reasonable based on the house layout and available objects.
+    1.	Activities must align with your profile and be diverse yet reasonable based on the house layout and available objects.
     2.	Activities must be high-level and either human-centric (e.g., hygiene, sport, leisure) or room-centric (e.g., clean, organize, set-up). Do not mention specific objects.
     3.  Activities should be non-repetitive.
     4. 	All objects are rigid and cannot deform, disassemble, or transform.
 
     Write in the following format. Do not output anything else:
-    Time: xxx am/pm
+    Time: xxx am/pm (e.g, 9 am)
     Intention: basic descriptions.
+    Reason: basic descriptions of why it follows your profile.
     """
     return contents
 
 
-def propose_intention(room_list, output_path, existing_response=None, temperature_dict=None, 
+def propose_intention(room_list, profile_string, output_path, existing_response=None, temperature_dict=None, 
                   model_dict=None, conversation_hist=None):
 
-    intention_user_contents_filled = propose_intention_prompt(room_list)
+    intention_user_contents_filled = propose_intention_prompt(room_list, profile_string)
 
     if existing_response is None:
         system = "You are a helpful assistant."

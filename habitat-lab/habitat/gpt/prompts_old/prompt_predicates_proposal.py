@@ -13,32 +13,40 @@ def propose_predicates_prompt(time_, sampled_motion_list, obj_room_mapping, prof
     Input:
     1.  The proposed activity at time: {time_}.
     2.	A dict mapping rigid, static objects to their IDs and rooms: {obj_room_mapping[0]}.
-    3.  Your human profile: {profile_string}.
+    3.	A dict mapping rigid, dynamic objects to their IDs and rooms: {obj_room_mapping[1]}.
+    4.  Your human profile: {profile_string}.
 
     You are a human living in the house.
 
     Instructions:
-    1.  Break down the activity into several (2 to 5) predicates to collaborate with a robot.
-    2.	Predicate types: 
-        - Type 1: Creative, reasonable free-form human motion interacting or approaching a fixed, static object (static objects cannot be moved) with an object in hand (e.g., sit on sofa with TV remote control in hand, wipe table with tissue in hand, squat with dumbbell in hand near rug).
-    3.  For interacting with fixed, static objects, use only objects from the given static object dict. For objects in hand (if any), a robot will provide them.
-    4.  Predicates should be continuous and logical, and align with your profile.
-    5.  Free-form motion should be diverse. Examples: {sampled_motion_list}. Feel free to propose others.
-    6. 	All objects are rigid and cannot deform, disassemble, or transform.
+    1.  Break down the activity into several (2 to 5) predicates, tracking any picked object in hand at each step.
+    2.  Predicates must align with your profile.
+    3.	Predicate types:
+        - Type 1: Creative, reasonable free-form human motion interacting with a fixed, static object (static objects cannot be moved)
+        - Type 2: Pick a dynamic object
+        - Type 3: Place the picked dynamic object at the place of the target object
+    4.  Use only objects from the given static and dynamic object dicts.
+    5.  Predicates should be continuous and logical.
+    6.  Start with no object in hand. Objects picked must be placed before picking another.
+    7.  Free-form motion can be conducted with picked object in hand. Type 1 predicate should be diverse and as majority of the predicates. Examples: {sampled_motion_list}. Feel free to propose others.
+    8. 	All objects are rigid and cannot deform, disassemble, or transform.
 
     Write in the following format. Do not output anything else:
     Time: xxx am/pm
     Intention: basic descriptions.
     Predicates: 
-    1. Thought: basic descriptions and why it alignes with your profile. Act: [type: 1, inter_obj_id: real int, inter_obj_name: xxx, inhand_obj_name: yyy, motion: free-form motion/pick/place]
+    1. Thought: basic descriptions. Act: [type: 1/2/3, obj_id: real int, obj_name: xxx, property: static/dynamic, motion: free-form motion/pick/place]
     2. ...
+    Tracking: none or obj_id (real int) in a list, with length equal to the number of predicates.
 
     Examples:
-    Time: 10 am
-    Intention: Leisure activity in the living room.
-    Predicates:
-    1. Thought: Relaxing and enjoying a TV show, which aligns with my profile of enjoying entertainment. Act: [type: 1, inter_obj_id: 101, inter_obj_name: sofa, inhand_obj_name: remote control, motion: sit]
-    2. Thought: Staying hydrated while watching TV on sofa, which supports my health-conscious profile. Act: [type: 1, inter_obj_id: 102, inter_obj_name: sofa, inhand_obj_name: water bottle, motion: sit_and_drink]
+    Time: 10:00 am
+    Intention: Make a cup of hot drink.
+    Predicates: 
+    1. Thought: Pick up the kettle. No specific reason relating to my profile. Act: [type: 2, obj_id: kettle_id (real int), obj_name: kettle, property: dynamic, motion: pick]
+    2. Thought: Fill the kettle with water. I drink water because I have a clean diet. Act: [type: 1, obj_id: kettle_id (real int), obj_name: kettle, property: dynamic, motion: fill_with_water]
+    3. Thought: Place the kettle on the stove. I like my house to be tidy. Act: [type: 3, obj_id: stove_id (real int), obj_name: stove, property: static, motion: place]
+    Tracking: [kettle_id, kettle_id, none]
     """
     return contents
 
