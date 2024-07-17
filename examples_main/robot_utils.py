@@ -63,8 +63,8 @@ dir_path = repo.working_tree_dir
 data_path = os.path.join(dir_path, "data")
 os.chdir(dir_path)
 
-from habitat.gpt.prompts.prompt_intention_discovery import discover_intention
-from habitat.gpt.prompts.prompt_predicates_discovery import discover_predicates
+from habitat.gpt.prompts.robot.prompt_intention_discovery import discover_intention
+from habitat.gpt.prompts.robot.prompt_predicates_discovery import discover_predicates
 from habitat.gpt.prompts.utils import load_response
 
 from sentence_transformers import SentenceTransformer

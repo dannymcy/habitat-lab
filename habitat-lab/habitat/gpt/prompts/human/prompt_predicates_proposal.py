@@ -13,24 +13,24 @@ def propose_predicates_prompt(time_, sampled_motion_list, obj_room_mapping, prof
     Input:
     1.  The proposed activity at time: {time_}.
     2.	A dict mapping rigid, static objects to their IDs and rooms: {obj_room_mapping[0]}.
-    3.  Your human profile: {profile_string}.
 
     You are a human living in the house.
 
     Instructions:
-    1.  Break down the activity into several (2 to 5) predicates to collaborate with a robot.
+    1.  Break down the activity into 5 predicates for collaboration with a robot.
     2.	Predicate types: 
-        - Type 1: Creative, reasonable free-form human motion interacting or approaching a fixed, static object (static objects cannot be moved) with an object in hand (e.g., sit on sofa with TV remote control in hand, wipe table with tissue in hand, squat with dumbbell in hand near rug).
-    3.  For interacting with fixed, static objects, use only objects from the given static object dict. For objects in hand (if any), a robot will provide them.
-    4.  Predicates should be continuous and logical, and align with your profile.
-    5.  Free-form motion should be diverse. Examples: {sampled_motion_list}. Feel free to propose others.
-    6. 	All objects are rigid and cannot deform, disassemble, or transform.
+        - Type 1: Creative, reasonable free-form human motion interacting or approaching a fixed, static object (static objects cannot be moved) with an object in hand provided by the robot (e.g., sit on sofa with TV remote control in hand, wipe table with tissue in hand, squat with dumbbell in hand near rug).
+    3.  For interacting with fixed, static objects, use only objects from the given static object dict. For objects in hand, a robot will provide them.
+    4   Both interacting and inhand objects must be specified.
+    5.  Predicates should be continuous and logical, and align with your profile.
+    6.  Free-form motion should be diverse. Examples: {sampled_motion_list}. Feel free to propose others.
+    7. 	All objects are rigid and cannot deform, disassemble, or transform.
 
     Write in the following format. Do not output anything else:
     Time: xxx am/pm
     Intention: basic descriptions.
     Predicates: 
-    1. Thought: basic descriptions and why it alignes with your profile. Act: [type: 1, inter_obj_id: real int, inter_obj_name: xxx, inhand_obj_name: yyy, motion: free-form motion/pick/place]
+    1. Thought: detailed descriptions and why it alignes with your profile. Act: [type: 1, inter_obj_id: real int, inter_obj_name: xxx, inhand_obj_name: yyy, motion: free-form motion/pick/place]
     2. ...
 
     Examples:

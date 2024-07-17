@@ -15,18 +15,18 @@ def propose_intention_prompt(room_list, profile_string):
     2.  Your human profile (ignore any information about dating partner): {profile_string}.
 
     You are a human living in the house.
-    Propose your activities across a day (9am to 9pm) with three-hour intervals.
+    Propose your activities across a day (9 am to 9 pm) with one-hour intervals.
 
     Constraints:
     1.	Activities must align with your profile and be diverse yet reasonable based on the house layout and available objects.
     2.	Activities must be high-level and either human-centric (e.g., hygiene, sport, leisure) or room-centric (e.g., clean, organize, set-up). Do not mention specific objects.
-    3.  Activities should be non-repetitive.
+    3.  Activities should be within the house.
     4. 	All objects are rigid and cannot deform, disassemble, or transform.
 
     Write in the following format. Do not output anything else:
     Time: xxx am/pm (e.g, 9 am)
     Intention: basic descriptions.
-    Reason: basic descriptions of why it follows your profile.
+    Reason: detailed descriptions of why it follows your profile.
     """
     return contents
 

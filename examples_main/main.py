@@ -156,34 +156,34 @@ def create_agent_action(agent_dict, scene_id):
 
 
 def make_videos(output_dir):
-    # vut.make_video(
-    #     observations,
-    #     "agent_0_head_rgb",
-    #     "color",
-    #     os.path.join(output_dir, "robot_scene_camera_rgb_video.mp4"),
-    #     open_vid=False,  # Ensure this is set to False to prevent video from popping up
-    # )
-    # vut.make_video(
-    #     observations,
-    #     "agent_0_third_rgb",
-    #     "color",
-    #     os.path.join(output_dir, "robot_third_rgb_video.mp4"),
-    #     open_vid=False,
-    # )
-    # vut.make_video(
-    #     observations,
-    #     "agent_1_head_rgb",
-    #     "color",
-    #     os.path.join(output_dir, "human_scene_camera_rgb_video.mp4"),
-    #     open_vid=False, 
-    # )
-    # vut.make_video(
-    #     observations,
-    #     "agent_1_third_rgb",
-    #     "color",
-    #     os.path.join(output_dir, "human_third_rgb_video.mp4"),
-    #     open_vid=False,
-    # )
+    vut.make_video(
+        observations,
+        "agent_0_head_rgb",
+        "color",
+        os.path.join(output_dir, "robot_scene_camera_rgb_video.mp4"),
+        open_vid=False,  # Ensure this is set to False to prevent video from popping up
+    )
+    vut.make_video(
+        observations,
+        "agent_0_third_rgb",
+        "color",
+        os.path.join(output_dir, "robot_third_rgb_video.mp4"),
+        open_vid=False,
+    )
+    vut.make_video(
+        observations,
+        "agent_1_head_rgb",
+        "color",
+        os.path.join(output_dir, "human_scene_camera_rgb_video.mp4"),
+        open_vid=False, 
+    )
+    vut.make_video(
+        observations,
+        "agent_1_third_rgb",
+        "color",
+        os.path.join(output_dir, "human_third_rgb_video.mp4"),
+        open_vid=False,
+    )
     vut.make_video(
         observations,
         "agent_1_top_rgb",
@@ -512,7 +512,7 @@ def walk_to(env, humanoid_controller, place_object_trans):
     agent_rot = np.inf
     prev_rot = env.sim.agents_mgr[1].articulated_agent.base_rot
     prev_pos = env.sim.agents_mgr[1].articulated_agent.base_pos
-    while agent_displ > 1e-9 or agent_rot > 1e-9:
+    while agent_displ > 1e-1 or agent_rot > 1e-2:  # TODO: change from threshold of 1e-9 to 1e-3 avoids the OOM issue
         prev_rot = env.sim.agents_mgr[1].articulated_agent.base_rot
         prev_pos = env.sim.agents_mgr[1].articulated_agent.base_pos
         action_dict = {
@@ -629,8 +629,8 @@ def customized_humanoid_motion(env, convert_helper, folder_dict, motion_pkl_path
         observations.append(env.step(action_dict))
 
 
-def execute_humanoid(env, extracted_planning, motion_sets_list, obj_room_mapping, obj_trans_dict):
-    # TODO: Using dmesg -T, the process is sometimes killed because OOM Killer. 
+def execute_humanoid_1(env, extracted_planning, motion_sets_list, obj_room_mapping, obj_trans_dict):
+    # TODO: Using sudo dmesg -T, the process is sometimes killed because OOM Killer. 
     # The reason is likely to be for some free-form motion, the robot is in collision with the scene, and increases computation overhead.
     # When rendering the videos, it causes OOM Killer.
     static_obj_room_mapping, dynamic_obj_room_mapping = obj_room_mapping[0], obj_room_mapping[1]
@@ -661,8 +661,8 @@ def execute_humanoid(env, extracted_planning, motion_sets_list, obj_room_mapping
                 move_hand_and_place(env, humanoid_rearrange_controller, step[1], object_trans)
         print("step done")
    
-        # make_videos(output_dir)
-        # extract_frames(os.path.join(output_dir, "human_third_rgb_video.mp4"), os.path.join(output_dir, "human_third_rgb_video"))
+        make_videos(output_dir)
+        extract_frames(os.path.join(output_dir, "human_third_rgb_video.mp4"), os.path.join(output_dir, "human_third_rgb_video"))
     
     # make_videos(output_dir)
 
@@ -670,50 +670,65 @@ def execute_humanoid(env, extracted_planning, motion_sets_list, obj_room_mapping
 def read_human_data():
     csv_file_path = os.path.join(data_path, "humanoids/humanoid_data/okcupid_profiles.csv")
     okcupid_data = pd.read_csv(csv_file_path)
-    profiles = okcupid_data[['age', 'sex', 'orientation', 'body_type', 'diet', 'drinks', 'education', 'ethnicity', 'height', 'job', 'location', 'offspring', 'pets', 'religion', 'smokes', 'essay0', 'essay1']]
+    profiles = okcupid_data[['age', 'sex', 'orientation', 'body_type', 'diet', 'drinks', 'education', 'ethnicity', 'height', 'job', 'location', 'offspring', 'pets', 'religion', 'smokes', 'essay0', 'essay1', 'essay2', 'essay3', 'essay4', 'essay5', 'essay6','essay7', 'essay8', 'essay9']]
 
-    selected_profile = profiles.iloc[0]
+    profile_string_complete_list = []
+    profile_string_partial_list = []
 
-    # Create a one-paragraph string
-    profile_string_complete = (
-        f"Age: {selected_profile['age']}; "
-        f"Sex: {selected_profile['sex']}; "
-        f"Orientation: {selected_profile['orientation']}; "
-        f"Body Type: {selected_profile['body_type']}; "
-        f"Diet: {selected_profile['diet']}; "
-        f"Drinks: {selected_profile['drinks']}; "
-        f"Education: {selected_profile['education']}; "
-        f"Ethnicity: {selected_profile['ethnicity']}; "
-        f"Height: {selected_profile['height']}; "
-        f"Job: {selected_profile['job']}; "
-        f"Location: {selected_profile['location']}; "
-        f"Offspring: {selected_profile['offspring']}; "
-        f"Pets: {selected_profile['pets']}; "
-        f"Religion: {selected_profile['religion']}; "
-        f"Smokes: {selected_profile['smokes']}; "
-        f"Intro 1: {selected_profile['essay0']}; "
-        f"Intro 2: {selected_profile['essay1']}"
-    )
+    for i in range(min(100, len(profiles))):
+        selected_profile = profiles.iloc[i]
 
-    profile_string_partial = (
-        f"Age: {selected_profile['age']}; "
-        f"Sex: {selected_profile['sex']}; "
-        f"Orientation: {selected_profile['orientation']}; "
-        f"Body Type: {selected_profile['body_type']}; "
-        f"Diet: {selected_profile['diet']}; "
-        f"Drinks: {selected_profile['drinks']}; "
-        f"Education: {selected_profile['education']}; "
-        f"Ethnicity: {selected_profile['ethnicity']}; "
-        f"Height: {selected_profile['height']}; "
-        f"Job: {selected_profile['job']}; "
-        f"Location: {selected_profile['location']}; "
-        f"Offspring: {selected_profile['offspring']}; "
-        f"Pets: {selected_profile['pets']}; "
-        f"Religion: {selected_profile['religion']}; "
-        f"Smokes: {selected_profile['smokes']}."
-    )
+        # Create a one-paragraph string
+        profile_string_complete = (
+            f"Age: {selected_profile['age']}; "
+            f"Sex: {selected_profile['sex']}; "
+            f"Orientation: {selected_profile['orientation']}; "
+            f"Body Type: {selected_profile['body_type']}; "
+            f"Diet: {selected_profile['diet']}; "
+            f"Drinks: {selected_profile['drinks']}; "
+            f"Education: {selected_profile['education']}; "
+            f"Ethnicity: {selected_profile['ethnicity']}; "
+            f"Height: {selected_profile['height']}; "
+            f"Job: {selected_profile['job']}; "
+            f"Location: {selected_profile['location']}; "
+            f"Offspring: {selected_profile['offspring']}; "
+            f"Pets: {selected_profile['pets']}; "
+            f"Religion: {selected_profile['religion']}; "
+            f"Smokes: {selected_profile['smokes']}; "
+            f"Intro 1: {selected_profile['essay0']}; "
+            f"Intro 2: {selected_profile['essay1']}; "
+            f"Intro 3: {selected_profile['essay2']}; "
+            f"Intro 4: {selected_profile['essay3']}; "
+            f"Intro 5: {selected_profile['essay4']}; "
+            f"Intro 6: {selected_profile['essay5']}; "
+            f"Intro 7: {selected_profile['essay6']}; "
+            f"Intro 8: {selected_profile['essay7']}; "
+            f"Intro 9: {selected_profile['essay8']}; "    
+            f"Intro 10: {selected_profile['essay9']}"  
+        )
 
-    return profile_string_complete, profile_string_partial
+        profile_string_partial = (
+            f"Age: {selected_profile['age']}; "
+            f"Sex: {selected_profile['sex']}; "
+            f"Orientation: {selected_profile['orientation']}; "
+            f"Body Type: {selected_profile['body_type']}; "
+            f"Diet: {selected_profile['diet']}; "
+            f"Drinks: {selected_profile['drinks']}; "
+            f"Education: {selected_profile['education']}; "
+            f"Ethnicity: {selected_profile['ethnicity']}; "
+            f"Height: {selected_profile['height']}; "
+            f"Job: {selected_profile['job']}; "
+            f"Location: {selected_profile['location']}; "
+            f"Offspring: {selected_profile['offspring']}; "
+            f"Pets: {selected_profile['pets']}; "
+            f"Religion: {selected_profile['religion']}; "
+            f"Smokes: {selected_profile['smokes']}."
+        )
+
+        profile_string_complete_list.append(profile_string_complete)
+        profile_string_partial_list.append(profile_string_partial)
+
+    return profile_string_complete_list, profile_string_partial_list
 
 
 
@@ -804,12 +819,11 @@ if __name__ == "__main__":
 
     # Communicating to ChatGPT-4 API
     temperature_dict = {
-      "intention_proposal": 0.7,
-      "predicates_proposal": 0.7,
-      "predicates_reflection": 0.3,
-      "motion_planning": 0.3,
-      "intention_discovery": 0.3,
-      "predicates_discovery": 0.7,
+      "intention_proposal": 0.9,
+      "predicates_proposal": 0.9,
+      "predicates_reflection": 0.25,
+      "intention_discovery": 0.9,
+      "predicates_discovery": 0.9,
       "collaboration_proposal": 0.7
     }
     # GPT-4 1106-preview is GPT-4 Turbo (https://openai.com/pricing)
@@ -817,37 +831,39 @@ if __name__ == "__main__":
       "intention_proposal": "gpt-4o",
       "predicates_proposal": "gpt-4o",
       "predicates_reflection": "gpt-4o",
-      "motion_planning": "gpt-4o",
       "intention_discovery": "gpt-4o",
       "predicates_discovery": "gpt-4o",
       "collaboration_proposal": "gpt-4o"
     }
 
-    profile_string_complete, profile_string_partial = read_human_data()
-    human_conversation_hist = intention_proposal_gpt4(data_path, scene_id, room_list, profile_string_complete, temperature_dict, model_dict, start_over=False)
-    times, intention_sentences, sampled_static_obj_dict_list = sample_obj_by_similarity(human_conversation_hist, static_obj_room_mapping, top_k=30)
-    _, sampled_motion_list = sample_motion_by_similarity(human_conversation_hist, motion_sets_list, top_k=5)
-
-
-    human_conversation_hist = predicates_proposal_gpt4(data_path, scene_id, times, sampled_motion_list, sampled_static_obj_dict_list, dynamic_obj_room_mapping, profile_string_partial, human_conversation_hist, temperature_dict, model_dict, start_over=False)
-    human_conversation_hist = predicates_reflection_gpt4(data_path, scene_id, times, sampled_motion_list, sampled_static_obj_dict_list, dynamic_obj_room_mapping, profile_string_partial, human_conversation_hist, temperature_dict, model_dict, start_over=False)
-    #human_conversation_hist = motion_planning_gpt4(data_path, scene_id, motion_sets_list, [static_obj_room_mapping, dynamic_obj_room_mapping],human_conversation_hist, temperature_dict, model_dict, start_over=False)
-
-
-    selected_time = "9 am"
-    for i, time_ in enumerate(times):
-        if time_ == selected_time:
-            break
+    profile_string_complete_list, profile_string_partial_list = read_human_data()
     
-    extracted_planning = extract_code("predicates_reflection", pathlib.Path(data_path) / "gpt4_response" / "human/predicates_reflection" / scene_id, i+5)
+    for i, profile_string_complete in enumerate(profile_string_complete_list):
+        profile_string_partial = profile_string_partial_list[i]
+        if i != 0: continue
 
-    execute_humanoid(env, extracted_planning, motion_sets_list, [static_obj_room_mapping, dynamic_obj_room_mapping], [static_obj_trans_dict, dynamic_obj_trans_dict])
-    
-    robot_conversation_hist = intention_discovery_gpt4(data_path, scene_id, time_, os.path.join(output_dir, "human_third_rgb_video"), temperature_dict, model_dict, start_over=False)
-    # print(extracted_planning[f"Time: {selected_time}"]["Intention"])
-    # if extract_confidence(robot_conversation_hist[0][1]) == "yes" or extract_confidence(robot_conversation_hist[0][1]) == "Yes":
-    
-    robot_conversation_hist = predicates_discovery_gpt4(data_path, scene_id, time_, robot_conversation_hist, temperature_dict, model_dict, start_over=False)
-    thought, act = extract_thoughts_and_acts(robot_conversation_hist[1][1])
-    predicate = extract_predicates(robot_conversation_hist[0][1])[0]
-    human_conversation_hist = collaboration_proposal_gpt4(data_path, scene_id, time_, sampled_motion_list[3], extracted_planning, predicate, thought, act, human_conversation_hist, temperature_dict, model_dict, start_over=False)
+        human_conversation_hist = intention_proposal_gpt4(data_path, i, scene_id, room_list, profile_string_complete, temperature_dict, model_dict, start_over=False)
+        times, intention_sentences, sampled_static_obj_dict_list = sample_obj_by_similarity(human_conversation_hist, static_obj_room_mapping, top_k=30)
+        _, sampled_motion_list = sample_motion_by_similarity(human_conversation_hist, motion_sets_list, top_k=5)
+
+
+        human_conversation_hist = predicates_proposal_gpt4(data_path, i, scene_id, times, sampled_motion_list, sampled_static_obj_dict_list, dynamic_obj_room_mapping, profile_string_partial, human_conversation_hist, temperature_dict, model_dict, start_over=False)
+        human_conversation_hist = predicates_reflection_gpt4(data_path, i, scene_id, times, sampled_motion_list, sampled_static_obj_dict_list, dynamic_obj_room_mapping, profile_string_partial, human_conversation_hist, temperature_dict, model_dict, start_over=False)
+
+        selected_time = "9 am"
+        for i, time_ in enumerate(times):
+            if time_ == selected_time:
+                break
+        
+        extracted_planning = extract_code("predicates_reflection", pathlib.Path(data_path) / "gpt4_response" / "human/predicates_reflection" / scene_id / str(i).zfill(5), i)
+
+        execute_humanoid_1(env, extracted_planning, motion_sets_list, [static_obj_room_mapping, dynamic_obj_room_mapping], [static_obj_trans_dict, dynamic_obj_trans_dict])
+        
+        # robot_conversation_hist = intention_discovery_gpt4(data_path, scene_id, time_, os.path.join(output_dir, "human_third_rgb_video"), temperature_dict, model_dict, start_over=False)
+        # # print(extracted_planning[f"Time: {selected_time}"]["Intention"])
+        # # if extract_confidence(robot_conversation_hist[0][1]) == "yes" or extract_confidence(robot_conversation_hist[0][1]) == "Yes":
+        
+        # robot_conversation_hist = predicates_discovery_gpt4(data_path, scene_id, time_, robot_conversation_hist, temperature_dict, model_dict, start_over=False)
+        # thought, act = extract_thoughts_and_acts(robot_conversation_hist[1][1])
+        # predicate = extract_predicates(robot_conversation_hist[0][1])[0]
+        # human_conversation_hist = collaboration_proposal_gpt4(data_path, scene_id, time_, sampled_motion_list[3], extracted_planning, predicate, thought, act, human_conversation_hist, temperature_dict, model_dict, start_over=False)

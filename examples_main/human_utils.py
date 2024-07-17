@@ -63,11 +63,11 @@ dir_path = repo.working_tree_dir
 data_path = os.path.join(dir_path, "data")
 os.chdir(dir_path)
 
-from habitat.gpt.prompts.prompt_intention_proposal import propose_intention
-from habitat.gpt.prompts.prompt_predicates_proposal import propose_predicates
-from habitat.gpt.prompts.prompt_predicates_reflection import reflect_predicates
-# from habitat.gpt.prompts.prompt_motion_planning import plan_motion
-from habitat.gpt.prompts.prompt_collaboration_proposal import propose_collaboration
+from habitat.gpt.prompts.human.prompt_intention_proposal import propose_intention
+from habitat.gpt.prompts.human.prompt_predicates_proposal import propose_predicates
+from habitat.gpt.prompts.human.prompt_predicates_reflection import reflect_predicates
+# from habitat.gpt.prompts.human.prompt_motion_planning import plan_motion
+from habitat.gpt.prompts.human.prompt_collaboration_proposal import propose_collaboration
 from habitat.gpt.prompts.utils import load_response, extract_times, extract_intentions, extract_code
 
 from sentence_transformers import SentenceTransformer
@@ -75,8 +75,8 @@ from sentence_transformers import SentenceTransformer
 
 
 
-def intention_proposal_gpt4(data_path, scene_id, room_list, profile_string, temperature_dict, model_dict, start_over=False):
-    output_dir = pathlib.Path(data_path) / "gpt4_response" / "human/intention_proposal" / scene_id
+def intention_proposal_gpt4(data_path, human_id, scene_id, room_list, profile_string, temperature_dict, model_dict, start_over=False):
+    output_dir = pathlib.Path(data_path) / "gpt4_response" / "human/intention_proposal" / scene_id / str(human_id).zfill(5)
     os.makedirs(output_dir, exist_ok=True)
     conversation_hist = []
 
@@ -172,8 +172,8 @@ def sample_motion_by_similarity(conversation_hist, motion_list, top_k=5):
     return intention_sentences, sampled_motion_list
 
 
-def predicates_proposal_gpt4(data_path, scene_id, times, sampled_motion_list, sampled_static_obj_dict_list, dynamic_obj_room_mapping, profile_string, conversation_hist, temperature_dict, model_dict, start_over=False):
-    output_dir = pathlib.Path(data_path) / "gpt4_response" / "human/predicates_proposal" / scene_id
+def predicates_proposal_gpt4(data_path, human_id, scene_id, times, sampled_motion_list, sampled_static_obj_dict_list, dynamic_obj_room_mapping, profile_string, conversation_hist, temperature_dict, model_dict, start_over=False):
+    output_dir = pathlib.Path(data_path) / "gpt4_response" / "human/predicates_proposal" / scene_id / str(human_id).zfill(5)
     os.makedirs(output_dir, exist_ok=True)
     
     for i, time_ in enumerate(times):
@@ -186,11 +186,11 @@ def predicates_proposal_gpt4(data_path, scene_id, times, sampled_motion_list, sa
     return conversation_hist
 
 
-def predicates_reflection_gpt4(data_path, scene_id, times, sampled_motion_list, sampled_static_obj_dict_list, dynamic_obj_room_mapping, profile_string, conversation_hist, temperature_dict, model_dict, start_over=False):
-    output_dir = pathlib.Path(data_path) / "gpt4_response" / "human/predicates_reflection" / scene_id
+def predicates_reflection_gpt4(data_path, human_id, scene_id, times, sampled_motion_list, sampled_static_obj_dict_list, dynamic_obj_room_mapping, profile_string, conversation_hist, temperature_dict, model_dict, start_over=False):
+    output_dir = pathlib.Path(data_path) / "gpt4_response" / "human/predicates_reflection" / scene_id / str(human_id).zfill(5)
     os.makedirs(output_dir, exist_ok=True)
 
-    predicates_proposal_path = pathlib.Path(data_path) / "gpt4_response" / "human/predicates_proposal" / scene_id
+    predicates_proposal_path = pathlib.Path(data_path) / "gpt4_response" / "human/predicates_proposal" / scene_id / str(human_id).zfill(5)
     subdirs = load_response("predicates_proposal", predicates_proposal_path, get_latest=False)
 
     for i, time_ in enumerate(times):
