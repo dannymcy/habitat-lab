@@ -512,7 +512,8 @@ def walk_to(env, humanoid_controller, place_object_trans):
     agent_rot = np.inf
     prev_rot = env.sim.agents_mgr[1].articulated_agent.base_rot
     prev_pos = env.sim.agents_mgr[1].articulated_agent.base_pos
-    while agent_displ > 10 or agent_rot > 1e-1:  # TODO: change from threshold of 1e-9 to 1e-3 avoids the OOM issue
+    while agent_displ > 0.3:  # TODO: change from threshold of 1e-9 to 1e-3 avoids the OOM issue 
+    # while agent_displ > 3 or agent_rot > 1e-1:
         prev_rot = env.sim.agents_mgr[1].articulated_agent.base_rot
         prev_pos = env.sim.agents_mgr[1].articulated_agent.base_pos
         action_dict = {
@@ -529,6 +530,8 @@ def walk_to(env, humanoid_controller, place_object_trans):
         cur_rot = env.sim.agents_mgr[1].articulated_agent.base_rot
         cur_pos = env.sim.agents_mgr[1].articulated_agent.base_pos
         agent_displ = (cur_pos - place_object_trans).length()  # agent_displ = (cur_pos - prev_pos).length()
+        print()
+        print(agent_displ)
         agent_rot = np.abs(cur_rot - prev_rot)
 
     # Wait
