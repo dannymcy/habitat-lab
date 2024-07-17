@@ -156,6 +156,36 @@ def extract_frames(video_path, output_dir):
         frame_image.save(output_path)
         print(f"Frame {i} saved to {output_path}")
 
+
+def fluctuate_vector(vector, mean=0.0, std=0.5):
+    fluct_x = np.random.normal(mean, std)
+    fluct_y = np.random.normal(mean, std)
+    fluct_z = np.random.normal(mean, std)
+
+    vector.x += fluct_x
+    vector.y += fluct_y
+    vector.z += fluct_z
+
+    return vector
+
+
+def find_closest_objects(object_trans, obj_trans_dict_to_search, k=5):
+    def euclidean_distance(vec1, vec2):
+        return np.linalg.norm(np.array(vec1) + np.array(vec2))
+
+    distances = []
+    for name, (obj_id, trans) in obj_trans_dict_to_search.items():
+        dist = euclidean_distance(object_trans, trans)
+        distances.append((dist, trans))
+
+    # Sort based on distance
+    distances.sort(key=lambda x: x[0], reverse=True)  # reverse returns the furthest objects
+
+    # Get the top k closest objects
+    search_trans = [trans for _, trans in distances[:k]]
+
+    return search_trans
+
     
 def intention_discovery_gpt4(data_path, scene_id, time_, video_dir, temperature_dict, model_dict, start_over=False):
     output_dir = pathlib.Path(data_path) / "gpt4_response" / "robot/intention_discovery" / scene_id

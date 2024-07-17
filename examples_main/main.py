@@ -474,6 +474,10 @@ def select_pick_place_obj(env, scene_id, pick_obj_idx, place_obj_idx):
 
     print("\nList of dynamic rigid objects:")
     for handle, ro in rom.get_objects_by_handle_substring().items():
+        rigid_obj = rom.get_object_by_id(
+            ro.object_id
+        )
+        print(555, rigid_obj.motion_type)
         if ro.awake:
             print(handle, "id", ro.object_id)
             template_name = handle.split('_:')[0]
@@ -503,23 +507,38 @@ def pick_up(env, humanoid_controller, pick_obj_id, pick_object_trans):
         observations.append(env.step(action_dict)) 
 
 
-def walk_to(env, humanoid_controller, place_object_trans):
+def walk_to(env, humanoid_controller, object_trans, obj_trans_dict):
     # https://github.com/facebookresearch/habitat-lab/issues/1913
     humanoid_controller.reset(env.sim.agents_mgr[1].articulated_agent.base_transformation)  # This line is important
 
     # Walk towards the object to place
+    original_object_trans = object_trans
+    search_trans = find_closest_objects(object_trans, obj_trans_dict, k=5)[0]
     agent_displ = np.inf
+    prev_agent_displ = -np.inf
     agent_rot = np.inf
     prev_rot = env.sim.agents_mgr[1].articulated_agent.base_rot
     prev_pos = env.sim.agents_mgr[1].articulated_agent.base_pos
-    while agent_displ > 0.3:  # TODO: change from threshold of 1e-9 to 1e-3 avoids the OOM issue 
-    # while agent_displ > 3 or agent_rot > 1e-1:
+    while agent_displ > 1e-9:  # TODO: change from threshold of 1e-9 to 1e-3 avoids the OOM issue 
+    # while agent_displ > 1e-9 or agent_rot > 1e-9:
+        print(env.sim.agents_mgr[1].articulated_agent.base_pos)
+        if prev_agent_displ == agent_displ:
+            sample = env.sim.pathfinder.get_random_navigable_point_near(
+                circle_center=object_trans, radius=0.7, island_index=-1
+            )
+            vec_sample_obj = object_trans - sample
+
+            angle_sample_obj = np.arctan2(-vec_sample_obj[2], vec_sample_obj[0])
+
+            env.sim.agents_mgr[1].articulated_agent.base_pos = sample
+            env.sim.agents_mgr[1].articulated_agent.base_rot = angle_sample_obj
+
         prev_rot = env.sim.agents_mgr[1].articulated_agent.base_rot
         prev_pos = env.sim.agents_mgr[1].articulated_agent.base_pos
         action_dict = {
             "action": ("agent_1_humanoid_navigate_action", "agent_0_oracle_coord_action"),  
             "action_args": {
-                "agent_1_oracle_nav_lookat_action": place_object_trans,
+                "agent_1_oracle_nav_lookat_action": object_trans,
                 "agent_1_mode": 1,
                 "agent_0_oracle_nav_lookat_action": prev_pos,
                 "agent_0_mode": 1
@@ -529,9 +548,10 @@ def walk_to(env, humanoid_controller, place_object_trans):
         
         cur_rot = env.sim.agents_mgr[1].articulated_agent.base_rot
         cur_pos = env.sim.agents_mgr[1].articulated_agent.base_pos
-        agent_displ = (cur_pos - place_object_trans).length()  # agent_displ = (cur_pos - prev_pos).length()
-        print()
-        print(agent_displ)
+        prev_agent_displ = agent_displ
+        agent_displ = (cur_pos - object_trans).length()  # agent_displ = (cur_pos - prev_pos).length()
+        # print()
+        # print(agent_displ)
         agent_rot = np.abs(cur_rot - prev_rot)
 
     # Wait
@@ -649,7 +669,7 @@ def execute_humanoid_1(env, extracted_planning, motion_sets_list, obj_room_mappi
                 object_trans = trans
                 break
         
-        walk_to(env, humanoid_rearrange_controller, object_trans)
+        walk_to(env, humanoid_rearrange_controller, object_trans, obj_trans_dict_to_search)
         
         if step[0] == 1:
             selected_motion = most_similar_motion(step[4], motion_sets_list)[0]
