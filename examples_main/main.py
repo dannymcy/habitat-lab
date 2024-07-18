@@ -184,6 +184,7 @@ def make_videos(output_dir):
         os.path.join(output_dir, "human_third_rgb_video.mp4"),
         open_vid=False,
     )
+    # top perspective takes the most memory, aften OOM if resolution = 1024 x 768
     vut.make_video(
         observations,
         "agent_1_top_rgb",
@@ -353,24 +354,20 @@ def map_rooms_to_bounds(semantics_file):
     return room_bounds_mapping
 
 
-def create_static_obj_trans_dict(instance_file, object_mapping, static_categories):
+def create_static_obj_trans_dict(static_obj_handle_list, static_obj_id_list, static_obj_trans_list, static_obj_bb_list, instance_file, object_mapping, static_categories):
     """
     Create a dictionary with actual object names and their translations, only if they belong to specified static categories.
     """
     object_translation_dict = {}
     # TODO: multiple same objects will be added as a single instance
-    i = 0
-    for obj in instance_file['object_instances']:
-        template_name = obj['template_name']
+    for i, template_name in enumerate(static_obj_handle_list):
         if template_name in object_mapping:
             actual_name = object_mapping[template_name]['name']
             if pd.isna(actual_name): actual_name = object_mapping[template_name]['wnsynsetkey']
             super_category = object_mapping[template_name]['super_category']
             # if super_category in static_categories:
             if True:
-                translation = obj['translation']
-                object_translation_dict[actual_name] = [i, mn.Vector3(translation)]
-                i += 1
+                object_translation_dict[actual_name] = [static_obj_id_list[i], static_obj_trans_list[i], static_obj_bb_list[i]]
     return object_translation_dict
     
 
@@ -447,6 +444,27 @@ def map_objects_to_rooms(object_trans_dict, room_bounds_mapping):
     return obj_room_mapping
 
 
+def map_single_object_to_room(object_translation, room_bounds_mapping):
+    """
+    Determine which room the object is in based on its translation and return the center of that room.
+    """
+    for room, bounds in room_bounds_mapping.items():
+        min_bounds = bounds["min_bounds"]
+        max_bounds = bounds["max_bounds"]
+        
+        # Check if the object is within the room bounds (ignoring height)
+        if (min_bounds[0] <= object_translation[0] <= max_bounds[0] and
+            # min_bounds[1] <= object_translation[1] <= max_bounds[1] and  # height is ignored
+            min_bounds[2] <= object_translation[2] <= max_bounds[2]):
+            # Calculate the center of the room
+            center_x = (min_bounds[0] + max_bounds[0]) / 2
+            center_y = (min_bounds[1] + max_bounds[1]) / 2
+            center_z = (min_bounds[2] + max_bounds[2]) / 2
+            return room, (center_x, 0, center_z)
+    
+    return None
+
+
 def select_pick_place_obj(env, scene_id, pick_obj_idx, place_obj_idx):
     semantics_file = os.path.join(data_path, f"hab3_bench_assets/hab3-hssd/semantics/scenes/{scene_id}.semantic_config.json")
     instance_file = os.path.join(data_path, f"hab3_bench_assets/hab3-hssd/scenes/{scene_id}.scene_instance.json")
@@ -460,9 +478,8 @@ def select_pick_place_obj(env, scene_id, pick_obj_idx, place_obj_idx):
 
     room_dict = map_rooms_to_bounds(semantics_file)
     obj_mapping = load_object_mapping(object_csv_path)
-    with open(instance_file, 'r') as f: instance_data = json.load(f)
-    static_obj_trans_dict = create_static_obj_trans_dict(instance_data, obj_mapping, static_categories)
     dynamic_obj_trans_dict = {}
+    static_obj_handle_list, static_obj_id_list, static_obj_trans_list, static_obj_bb_list = [], [], [], []
     
     aom = env.sim.get_articulated_object_manager()
     rom = env.sim.get_rigid_object_manager()
@@ -477,13 +494,21 @@ def select_pick_place_obj(env, scene_id, pick_obj_idx, place_obj_idx):
         rigid_obj = rom.get_object_by_id(
             ro.object_id
         )
-        print(555, rigid_obj.motion_type)
         if ro.awake:
             print(handle, "id", ro.object_id)
             template_name = handle.split('_:')[0]
             trans = (rom.get_object_by_id(ro.object_id)).translation
+            bb = (rom.get_object_by_id(ro.object_id)).aabb
             actual_name = obj_mapping[template_name]['name'] if template_name in obj_mapping else handle
-            dynamic_obj_trans_dict[actual_name] = [ro.object_id, trans]
+            dynamic_obj_trans_dict[actual_name] = [ro.object_id, trans, bb]
+        else:
+            static_obj_handle_list.append(handle.split('_:')[0])
+            static_obj_id_list.append(ro.object_id)
+            static_obj_trans_list.append((rom.get_object_by_id(ro.object_id)).translation)
+            static_obj_bb_list.append((rom.get_object_by_id(ro.object_id)).aabb)
+
+    with open(instance_file, 'r') as f: instance_data = json.load(f)
+    static_obj_trans_dict = create_static_obj_trans_dict(static_obj_handle_list, static_obj_id_list, static_obj_trans_list, static_obj_bb_list, instance_data, obj_mapping, static_categories)
     
     static_obj_room_mapping = map_objects_to_rooms(static_obj_trans_dict, room_dict)
     dynamic_obj_room_mapping = map_objects_to_rooms(dynamic_obj_trans_dict, room_dict)
@@ -507,31 +532,36 @@ def pick_up(env, humanoid_controller, pick_obj_id, pick_object_trans):
         observations.append(env.step(action_dict)) 
 
 
-def walk_to(env, humanoid_controller, object_trans, obj_trans_dict):
+def walk_to(env, predicate_idx, humanoid_controller, object_trans, object_bb, obj_trans_dict, room_dict):
     # https://github.com/facebookresearch/habitat-lab/issues/1913
+    obj_room, room_trans = map_single_object_to_room(object_trans, room_dict)
+    if predicate_idx == 0:
+        env.sim.agents_mgr[1].articulated_agent.base_pos = mn.Vector3(room_trans)
     humanoid_controller.reset(env.sim.agents_mgr[1].articulated_agent.base_transformation)  # This line is important
 
     # Walk towards the object to place
-    original_object_trans = object_trans
-    search_trans = find_closest_objects(object_trans, obj_trans_dict, k=5)[0]
     agent_displ = np.inf
     prev_agent_displ = -np.inf
     agent_rot = np.inf
+    prev_agent_rot = -np.inf
     prev_rot = env.sim.agents_mgr[1].articulated_agent.base_rot
     prev_pos = env.sim.agents_mgr[1].articulated_agent.base_pos
-    while agent_displ > 1e-9:  # TODO: change from threshold of 1e-9 to 1e-3 avoids the OOM issue 
+    width, height, depth = calculate_bounding_box_size(object_bb)
+    threshold = max(width, depth)
+
+    while agent_displ > threshold or agent_rot > 1e-3:  # TODO: change from threshold of 1e-9 to 1e-3 avoids the OOM issue 
     # while agent_displ > 1e-9 or agent_rot > 1e-9:
-        print(env.sim.agents_mgr[1].articulated_agent.base_pos)
-        if prev_agent_displ == agent_displ:
-            sample = env.sim.pathfinder.get_random_navigable_point_near(
-                circle_center=object_trans, radius=0.7, island_index=-1
-            )
-            vec_sample_obj = object_trans - sample
+        # print(env.sim.agents_mgr[1].articulated_agent.base_pos)
+        # print(env.sim.agents_mgr[1].articulated_agent.base_rot)
+        if prev_agent_displ == agent_displ and prev_agent_rot == agent_rot:
+            threshold += 0.1
+            # sample = env.sim.pathfinder.get_random_navigable_point_near(circle_center=object_trans, radius=threshold, island_index=-1)
+            # vec_sample_obj = object_trans - sample
 
-            angle_sample_obj = np.arctan2(-vec_sample_obj[2], vec_sample_obj[0])
+            # angle_sample_obj = np.arctan2(-vec_sample_obj[2], vec_sample_obj[0])
 
-            env.sim.agents_mgr[1].articulated_agent.base_pos = sample
-            env.sim.agents_mgr[1].articulated_agent.base_rot = angle_sample_obj
+            # env.sim.agents_mgr[1].articulated_agent.base_pos = sample
+            # env.sim.agents_mgr[1].articulated_agent.base_rot = angle_sample_obj
 
         prev_rot = env.sim.agents_mgr[1].articulated_agent.base_rot
         prev_pos = env.sim.agents_mgr[1].articulated_agent.base_pos
@@ -549,10 +579,15 @@ def walk_to(env, humanoid_controller, object_trans, obj_trans_dict):
         cur_rot = env.sim.agents_mgr[1].articulated_agent.base_rot
         cur_pos = env.sim.agents_mgr[1].articulated_agent.base_pos
         prev_agent_displ = agent_displ
+        prev_agent_rot = agent_rot
         agent_displ = (cur_pos - object_trans).length()  # agent_displ = (cur_pos - prev_pos).length()
         # print()
         # print(agent_displ)
         agent_rot = np.abs(cur_rot - prev_rot)
+
+    human_room, room_trans = map_single_object_to_room(env.sim.agents_mgr[1].articulated_agent.base_pos, room_dict)
+    if obj_room != human_room:
+        print(9999)
 
     # Wait
     for _ in range(20):
@@ -652,7 +687,7 @@ def customized_humanoid_motion(env, convert_helper, folder_dict, motion_pkl_path
         observations.append(env.step(action_dict))
 
 
-def execute_humanoid_1(env, extracted_planning, motion_sets_list, obj_room_mapping, obj_trans_dict):
+def execute_humanoid_1(env, extracted_planning, motion_sets_list, obj_room_mapping, obj_trans_dict, room_dict):
     # TODO: Using sudo dmesg -T, the process is sometimes killed because OOM Killer. 
     # The reason is likely to be for some free-form motion, the robot is in collision with the scene, and increases computation overhead.
     # When rendering the videos, it causes OOM Killer.
@@ -663,13 +698,22 @@ def execute_humanoid_1(env, extracted_planning, motion_sets_list, obj_room_mappi
     for i, step in enumerate(planning):  # planning for each predicate
         if i != 0: continue
         obj_trans_dict_to_search = static_obj_trans_dict  # only dynamic object can be picked or placed
-        object_trans = None
-        for name, (obj_id, trans) in obj_trans_dict_to_search.items():
-            if obj_id == step[1]:
+        object_trans, object_bb = None, None
+        for name, (obj_id, trans, bb) in obj_trans_dict_to_search.items():
+            if obj_id == step[1] and name == step[2]:
                 object_trans = trans
+                object_bb = bb
+                break
+            elif obj_id == step[1]:
+                object_trans = trans
+                object_bb = bb
+                break
+            elif name == step[2]:
+                object_trans = trans
+                object_bb = bb
                 break
         
-        walk_to(env, humanoid_rearrange_controller, object_trans, obj_trans_dict_to_search)
+        walk_to(env, i, humanoid_rearrange_controller, object_trans, object_bb, obj_trans_dict_to_search, room_dict)
         
         if step[0] == 1:
             selected_motion = most_similar_motion(step[4], motion_sets_list)[0]
@@ -684,10 +728,10 @@ def execute_humanoid_1(env, extracted_planning, motion_sets_list, obj_room_mappi
                 move_hand_and_place(env, humanoid_rearrange_controller, step[1], object_trans)
         print("step done")
    
-        make_videos(output_dir)
-        extract_frames(os.path.join(output_dir, "human_third_rgb_video.mp4"), os.path.join(output_dir, "human_third_rgb_video"))
+        # make_videos(output_dir)
+        # extract_frames(os.path.join(output_dir, "human_third_rgb_video.mp4"), os.path.join(output_dir, "human_third_rgb_video"))
     
-    # make_videos(output_dir)
+    make_videos(output_dir)
 
 
 def read_human_data():
@@ -874,13 +918,13 @@ if __name__ == "__main__":
         human_conversation_hist = predicates_reflection_gpt4(data_path, i, scene_id, times, sampled_motion_list, sampled_static_obj_dict_list, dynamic_obj_room_mapping, profile_string_partial, human_conversation_hist, temperature_dict, model_dict, start_over=False)
 
         selected_time = "9 am"
-        for i, time_ in enumerate(times):
+        for j, time_ in enumerate(times):
             if time_ == selected_time:
                 break
-        
-        extracted_planning = extract_code("predicates_reflection", pathlib.Path(data_path) / "gpt4_response" / "human/predicates_reflection" / scene_id / str(i).zfill(5), i)
 
-        execute_humanoid_1(env, extracted_planning, motion_sets_list, [static_obj_room_mapping, dynamic_obj_room_mapping], [static_obj_trans_dict, dynamic_obj_trans_dict])
+        extracted_planning = extract_code("predicates_reflection", pathlib.Path(data_path) / "gpt4_response" / "human/predicates_reflection" / scene_id / str(i).zfill(5), j)
+
+        execute_humanoid_1(env, extracted_planning, motion_sets_list, [static_obj_room_mapping, dynamic_obj_room_mapping], [static_obj_trans_dict, dynamic_obj_trans_dict], room_dict)
         
         # robot_conversation_hist = intention_discovery_gpt4(data_path, scene_id, time_, os.path.join(output_dir, "human_third_rgb_video"), temperature_dict, model_dict, start_over=False)
         # # print(extracted_planning[f"Time: {selected_time}"]["Intention"])

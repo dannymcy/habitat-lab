@@ -157,34 +157,47 @@ def extract_frames(video_path, output_dir):
         print(f"Frame {i} saved to {output_path}")
 
 
-def fluctuate_vector(vector, mean=0.0, std=0.5):
-    fluct_x = np.random.normal(mean, std)
-    fluct_y = np.random.normal(mean, std)
-    fluct_z = np.random.normal(mean, std)
+# def fluctuate_vector(vector, mean=0.0, std=0.5):
+#     fluct_x = np.random.normal(mean, std)
+#     fluct_y = np.random.normal(mean, std)
+#     fluct_z = np.random.normal(mean, std)
 
-    vector.x += fluct_x
-    vector.y += fluct_y
-    vector.z += fluct_z
+#     vector.x += fluct_x
+#     vector.y += fluct_y
+#     vector.z += fluct_z
 
-    return vector
+#     return vector
 
 
-def find_closest_objects(object_trans, obj_trans_dict_to_search, k=5):
-    def euclidean_distance(vec1, vec2):
-        return np.linalg.norm(np.array(vec1) + np.array(vec2))
+# def find_closest_objects(object_trans, obj_trans_dict_to_search, k=5):
+#     def euclidean_distance(vec1, vec2):
+#         return np.linalg.norm(np.array(vec1) + np.array(vec2))
 
-    distances = []
-    for name, (obj_id, trans) in obj_trans_dict_to_search.items():
-        dist = euclidean_distance(object_trans, trans)
-        distances.append((dist, trans))
+#     distances = []
+#     for name, (obj_id, trans, bb) in obj_trans_dict_to_search.items():
+#         dist = euclidean_distance(object_trans, trans)
+#         distances.append((dist, trans))
 
-    # Sort based on distance
-    distances.sort(key=lambda x: x[0], reverse=True)  # reverse returns the furthest objects
+#     # Sort based on distance
+#     distances.sort(key=lambda x: x[0], reverse=True)  # reverse returns the furthest objects
 
-    # Get the top k closest objects
-    search_trans = [trans for _, trans in distances[:k]]
+#     # Get the top k closest objects
+#     search_trans = [trans for _, trans in distances[:k]]
 
-    return search_trans
+#     return search_trans
+
+
+def calculate_bounding_box_size(bounding_box):
+    # bounding_box.min and bounding_box.max exist and are vectors
+    min_point = bounding_box.min
+    max_point = bounding_box.max
+    
+    # Calculate the size along each dimension
+    width = max_point.x - min_point.x
+    height = max_point.y - min_point.y
+    depth = max_point.z - min_point.z
+    
+    return width, height, depth  # not sure about the order
 
     
 def intention_discovery_gpt4(data_path, scene_id, time_, video_dir, temperature_dict, model_dict, start_over=False):
