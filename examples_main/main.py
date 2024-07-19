@@ -534,9 +534,14 @@ def pick_up(env, humanoid_controller, pick_obj_id, pick_object_trans):
 
 def walk_to(env, predicate_idx, humanoid_controller, object_trans, object_bb, obj_trans_dict, room_dict):
     # https://github.com/facebookresearch/habitat-lab/issues/1913
+    original_object_trans = object_trans
+    initial_observations_length = len(observations)
     obj_room, room_trans = map_single_object_to_room(object_trans, room_dict)
+
     if predicate_idx == 0:
         env.sim.agents_mgr[1].articulated_agent.base_pos = mn.Vector3(room_trans)
+    original_human_pos = env.sim.agents_mgr[1].articulated_agent.base_pos
+    original_human_rot = env.sim.agents_mgr[1].articulated_agent.base_rot
     humanoid_controller.reset(env.sim.agents_mgr[1].articulated_agent.base_transformation)  # This line is important
 
     # Walk towards the object to place
@@ -547,22 +552,9 @@ def walk_to(env, predicate_idx, humanoid_controller, object_trans, object_bb, ob
     prev_rot = env.sim.agents_mgr[1].articulated_agent.base_rot
     prev_pos = env.sim.agents_mgr[1].articulated_agent.base_pos
     width, height, depth = calculate_bounding_box_size(object_bb)
-    threshold = max(width, depth)
-
+    threshold = max(width, depth)  # setting the threhold to be exactly object's radius (max(width, depth)/2) causes collision
+ 
     while agent_displ > threshold or agent_rot > 1e-3:  # TODO: change from threshold of 1e-9 to 1e-3 avoids the OOM issue 
-    # while agent_displ > 1e-9 or agent_rot > 1e-9:
-        # print(env.sim.agents_mgr[1].articulated_agent.base_pos)
-        # print(env.sim.agents_mgr[1].articulated_agent.base_rot)
-        if prev_agent_displ == agent_displ and prev_agent_rot == agent_rot:
-            threshold += 0.1
-            # sample = env.sim.pathfinder.get_random_navigable_point_near(circle_center=object_trans, radius=threshold, island_index=-1)
-            # vec_sample_obj = object_trans - sample
-
-            # angle_sample_obj = np.arctan2(-vec_sample_obj[2], vec_sample_obj[0])
-
-            # env.sim.agents_mgr[1].articulated_agent.base_pos = sample
-            # env.sim.agents_mgr[1].articulated_agent.base_rot = angle_sample_obj
-
         prev_rot = env.sim.agents_mgr[1].articulated_agent.base_rot
         prev_pos = env.sim.agents_mgr[1].articulated_agent.base_pos
         action_dict = {
@@ -575,19 +567,27 @@ def walk_to(env, predicate_idx, humanoid_controller, object_trans, object_bb, ob
             }
         }
         observations.append(env.step(action_dict))
-        
-        cur_rot = env.sim.agents_mgr[1].articulated_agent.base_rot
-        cur_pos = env.sim.agents_mgr[1].articulated_agent.base_pos
+    
+        human_room, room_trans = map_single_object_to_room(env.sim.agents_mgr[1].articulated_agent.base_pos, room_dict)
+        if obj_room != human_room and agent_displ <= threshold:
+            del observations[initial_observations_length:]
+            env.sim.agents_mgr[1].articulated_agent.base_pos = original_human_pos
+            env.sim.agents_mgr[1].articulated_agent.base_rot = original_human_rot
+            object_trans = env.sim.pathfinder.get_random_navigable_point_near(circle_center=original_object_trans, radius=threshold, island_index=-1)
+            # vec_sample_obj = original_object_trans - sample
+            # print()
+            # print(object_trans)
+
+        if prev_agent_displ == agent_displ and prev_agent_rot == agent_rot:
+            threshold += 0.1
+
         prev_agent_displ = agent_displ
         prev_agent_rot = agent_rot
+        cur_rot = env.sim.agents_mgr[1].articulated_agent.base_rot
+        cur_pos = env.sim.agents_mgr[1].articulated_agent.base_pos
         agent_displ = (cur_pos - object_trans).length()  # agent_displ = (cur_pos - prev_pos).length()
-        # print()
-        # print(agent_displ)
-        agent_rot = np.abs(cur_rot - prev_rot)
-
-    human_room, room_trans = map_single_object_to_room(env.sim.agents_mgr[1].articulated_agent.base_pos, room_dict)
-    if obj_room != human_room:
-        print(9999)
+        agent_rot = np.inf if (obj_room != human_room and agent_displ <= threshold) else np.abs(cur_rot - prev_rot)
+            
 
     # Wait
     for _ in range(20):
@@ -689,14 +689,14 @@ def customized_humanoid_motion(env, convert_helper, folder_dict, motion_pkl_path
 
 def execute_humanoid_1(env, extracted_planning, motion_sets_list, obj_room_mapping, obj_trans_dict, room_dict):
     # TODO: Using sudo dmesg -T, the process is sometimes killed because OOM Killer. 
-    # The reason is likely to be for some free-form motion, the robot is in collision with the scene, and increases computation overhead.
+    # The reason is likely to be for some free-form motion, the robot planned path towards an object is never found / the robot is in collision with the scene, and increases computation overhead.
     # When rendering the videos, it causes OOM Killer.
     static_obj_room_mapping, dynamic_obj_room_mapping = obj_room_mapping[0], obj_room_mapping[1]
     static_obj_trans_dict, dynamic_obj_trans_dict = obj_trans_dict[0], obj_trans_dict[1]
     planning = extracted_planning[list(extracted_planning.keys())[0]]["Predicates"]
 
     for i, step in enumerate(planning):  # planning for each predicate
-        if i != 0: continue
+        # if i != 0: continue
         obj_trans_dict_to_search = static_obj_trans_dict  # only dynamic object can be picked or placed
         object_trans, object_bb = None, None
         for name, (obj_id, trans, bb) in obj_trans_dict_to_search.items():
