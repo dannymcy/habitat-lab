@@ -564,9 +564,10 @@ def _get_robot_spawns(
 
     # Try to place the robot.
     is_feasible_state = False
-    flag = 999
+    flag = np.inf
     ignore_logic = 0
     target_position_original = target_position
+    step_iter = 0
     while is_feasible_state is False:
         for _ in range(num_spawn_attempts):
             # Place within `distance_threshold` of the object.
@@ -612,7 +613,7 @@ def _get_robot_spawns(
                 _, details = rearrange_collision(
                     sim,
                     False,
-                    ignore_base=False,
+                    ignore_base=ignore_logic,  # changed from False
                 )
 
                 # Only care about collisions between the robot and scene.
@@ -625,14 +626,15 @@ def _get_robot_spawns(
                 agent.base_rot = start_rotation
                 return candidate_navmesh_position, angle_to_object, False
         
-        if flag == 1:
-            fluctuation_range = 0.25
-            fluctuations = np.random.uniform(-fluctuation_range, fluctuation_range, size=target_position.shape)
-            target_position = target_position_original + fluctuations
+        step_iter += 1
+        if flag == 1 or step_iter > 30:
+            ignore_logic = 1
         elif flag == 2:
             distance_threshold *= 1.01
-        elif flag == 999:
-            ignore_logic = 1
+        # elif flag == 3:
+        #     fluctuation_range = 0.25
+        #     fluctuations = np.random.uniform(-fluctuation_range, fluctuation_range, size=target_position.shape)
+        #     target_position = target_position_original + fluctuations
 
     # failure to sample a feasbile state: reset state and return initial conditions
     # agent.base_pos = start_position

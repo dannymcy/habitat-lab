@@ -276,7 +276,7 @@ class MotionConverterSMPLX:
                         )
                         Q = mn.Quaternion.rotation(
                             axis_angle_rotation_ang,
-                            axis_angle_rotation.normalized(),
+                            axis_angle_rotation.normalized().normalized(),  # double normalized to avoid weird not normalized issue
                         )
                         Ql = list(Q.vector) + [float(Q.scalar)]
 

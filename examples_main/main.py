@@ -1,6 +1,9 @@
 import habitat_sim
 import magnum as mn
 import warnings
+import logging
+import io
+import sys
 from habitat.tasks.rearrange.rearrange_sim import RearrangeSim
 warnings.filterwarnings('ignore')
 from habitat_sim.utils.settings import make_cfg
@@ -184,7 +187,8 @@ def make_videos(output_dir):
         os.path.join(output_dir, "human_third_rgb_video.mp4"),
         open_vid=False,
     )
-    # top perspective takes the most memory, aften OOM if resolution = 1024 x 768
+    # TODO: top perspective takes the most memory, aften OOM if resolution = 1024 x 768
+    # when the observation and action.step is too long, causes OOM error
     vut.make_video(
         observations,
         "agent_1_top_rgb",
@@ -194,146 +198,8 @@ def make_videos(output_dir):
     )
 
 
-def convert_npy_to_npz(npy_file_path, output_npz_path):
-    """
-    Convert motion data from a .npy file into separate motion parameters and save them as .npy and .npz files.
-
-    Parameters:
-    npy_file_path (str): Path to the input .npy file containing motion data.
-    output_npz_path (str): Path to the output .npz file.
-    trans_order (str): Order of the translation coordinates. Default is 'xyz'.
-    trans_signs (str): Signs for the translation coordinates. Use '+' for positive and '-' for negative.
-    """
-    # Load the provided .npy file
-    motion = np.load(npy_file_path, allow_pickle=True)
-
-    # Convert to PyTorch tensor and float
-    motion = torch.tensor(motion).float()
-
-    # Extract motion parameters
-    # https://github.com/IDEA-Research/Motion-X
-    motion_parms = {
-        'root_orient': motion[:, :3].numpy(),  # controls the global root orientation
-        'pose_body': motion[:, 3:3+63].numpy(),  # controls the body
-        'pose_hand': motion[:, 66:66+90].numpy(),  # controls the finger articulation
-        'pose_jaw': motion[:, 66+90:66+93].numpy(),  # controls the yaw pose
-        'face_expr': motion[:, 159:159+50].numpy(),  # controls the face expression
-        'face_shape': motion[:, 209:209+100].numpy(),  # controls the face shape
-        'trans': motion[:, 309:309+3].numpy(),  # controls the global body position
-        'betas': motion[:, 312:].numpy(),  # controls the body shape. Body shape is static
-    }
-
-    trans_order='xyz'
-    trans_signs='+++'
-    # Reorder the translation coordinates based on the given order
-    order_map = {'x': 0, 'y': 1, 'z': 2}
-    trans_order_indices = [order_map[axis] for axis in trans_order]
-    motion_parms['trans'] = motion_parms['trans'][:, trans_order_indices]
-
-    # Apply signs to the translation coordinates
-    for i, sign in enumerate(trans_signs):
-        if sign == '-':
-            motion_parms['trans'][:, i] *= -1
-
-    orient_order='xyz'
-    orient_signs='+++'
-    # Reorder the orientation coordinates based on the given order
-    orient_order_indices = [order_map[axis] for axis in orient_order]
-    motion_parms['root_orient'] = motion_parms['root_orient'][:, orient_order_indices]
-
-    # Apply signs to the orientation coordinates
-    for i, sign in enumerate(orient_signs):
-        if sign == '-':
-            motion_parms['root_orient'][:, i] *= -1
-
-    # Create the output directory based on the .npz file name
-    output_dir = os.path.splitext(output_npz_path)[0]
-    os.makedirs(output_dir, exist_ok=True)
-
-    # Save each parameter as a .npy file
-    for key, value in motion_parms.items():
-        np.save(os.path.join(output_dir, f'{key}.npy'), value)
-
-    # Create poses.npy with a dimension of 165
-    num_frames = motion.shape[0]
-    zero_vec = np.zeros((num_frames, 3))
-    poses = np.concatenate([
-        zero_vec,
-        motion_parms['pose_body'],  # kind of certain
-        motion_parms['pose_jaw'],
-        motion_parms['root_orient'],
-        motion_parms['trans'],
-        motion_parms['pose_hand'],  # kind of certain
-    ], axis=1)
-    
-    np.save(os.path.join(output_dir, 'poses.npy'), poses)
-    motion_parms['poses'] = poses
-
-    # Create an .npz file containing all the parameters
-    np.savez(output_npz_path, **motion_parms)
-
-    # Verify the saved .npz file
-    saved_npz = np.load(output_npz_path)
-    saved_npz_keys = saved_npz.files
-    saved_npz_shapes = {key: saved_npz[key].shape for key in saved_npz_keys}
-
-    return saved_npz_keys, saved_npz_shapes
-
-
-def create_motion_sets(npy_file_folder_list, human_urdf_path, update=True):
-    # motion_npz_path = os.path.join(data_path, "humanoids/humanoid_data/walk_motion/CMU_10_04_stageii.npz")
-    # motion_pkl_path = os.path.join(data_path, "humanoids/humanoid_data/walk_motion/CMU_10_04_stageii.pkl")
-    motion_sets_list, motion_pkl_path_list, folder_list = [], [], []
-    convert_helper = MotionConverterSMPLX(urdf_path=human_urdf_path)
-
-    for folder in npy_file_folder_list:
-        # Ensure the folder exists
-        if not os.path.isdir(folder):
-            print(f"Folder does not exist: {folder}")
-            continue
-        
-        # Iterate through each file in the folder
-        for filename in os.listdir(folder):
-            if filename.endswith(".npy"):
-                # Full path of the .npy file
-                npy_full_path = os.path.join(folder, filename)
-
-                # Extract the relative path starting from 'data/'
-                motion_npy_path = os.path.join("data", npy_full_path.split('data/', 1)[1])
-                
-                # Create the base name for .npz and .pkl by removing the .npy extension
-                base_name = filename[:-4]
-                
-                # Create the corresponding .npz and .pkl paths
-                motion_npz_path = motion_npy_path.replace('.npy', '.npz')
-                motion_pkl_path = motion_npy_path.replace('.npy', '.pkl')
-
-                if update:
-                    convert_npy_to_npz(motion_npy_path , motion_npz_path)
-                    convert_helper.convert_motion_file(
-                        motion_path=motion_npz_path,
-                        output_path=motion_npz_path.replace(".npz", ""),
-                    )
-                motion_sets_list.append(base_name)
-                motion_pkl_path_list.append(motion_pkl_path)
-                folder_list.append(folder)
-
-    motion_dict = dict(zip(motion_sets_list, motion_pkl_path_list))
-    folder_dict = dict(zip(motion_pkl_path_list, folder_list))
-    return motion_sets_list, motion_dict, folder_dict, convert_helper
-
-
-def get_motion_pkl_path(motion_set_name, motion_dict):
-    return motion_dict.get(motion_set_name, None)
-
-
 def interpolate_points(start, end, steps):
     return [start + (end - start) * (i / steps) for i in range(1, steps + 1)]
-
-
-def set_agents_base_pos(env, robot_pos, human_pos):
-    env.sim.agents_mgr[0].articulated_agent.base_pos = robot_pos
-    env.sim.agents_mgr[1].articulated_agent.base_pos = human_pos
 
 
 def map_rooms_to_bounds(semantics_file):
@@ -386,6 +252,38 @@ def load_object_mapping(csv_path):
     return object_mapping
 
 
+def find_closest_room(object_translation, room_bounds_mapping):
+    """
+    Find the closest room to the object based on its translation.
+    """
+    closest_room = None
+    min_distance = float('inf')
+    closest_center = None
+
+    for room, bounds in room_bounds_mapping.items():
+        min_bounds = bounds["min_bounds"]
+        max_bounds = bounds["max_bounds"]
+        distance = 0
+        center_x = (min_bounds[0] + max_bounds[0]) / 2
+        center_y = (min_bounds[1] + max_bounds[1]) / 2
+        center_z = (min_bounds[2] + max_bounds[2]) / 2
+
+        # Calculate distance to the nearest boundary on each axis
+        for i in range(3):
+            if object_translation[i] < min_bounds[i]:
+                distance += (min_bounds[i] - object_translation[i]) ** 2
+            elif object_translation[i] > max_bounds[i]:
+                distance += (object_translation[i] - max_bounds[i]) ** 2
+
+        distance = distance ** 0.5
+        if distance < min_distance:
+            min_distance = distance
+            closest_room = room
+            closest_center = (center_x, 0, center_z)
+
+    return closest_room, closest_center
+
+
 def map_objects_to_rooms(object_trans_dict, room_bounds_mapping):
     """
     Map each object to the room it is located in.
@@ -404,32 +302,6 @@ def map_objects_to_rooms(object_trans_dict, room_bounds_mapping):
                 min_bounds[2] <= object_translation[2] <= max_bounds[2]):
                 return room
         return None
-
-    def find_closest_room(object_translation, room_bounds_mapping):
-        """
-        Find the closest room to the object based on its translation.
-        """
-        closest_room = None
-        min_distance = float('inf')
-
-        for room, bounds in room_bounds_mapping.items():
-            min_bounds = bounds["min_bounds"]
-            max_bounds = bounds["max_bounds"]
-            distance = 0
-
-            # Calculate distance to the nearest boundary on each axis
-            for i in range(3):
-                if object_translation[i] < min_bounds[i]:
-                    distance += (min_bounds[i] - object_translation[i]) ** 2
-                elif object_translation[i] > max_bounds[i]:
-                    distance += (object_translation[i] - max_bounds[i]) ** 2
-
-            distance = distance ** 0.5
-            if distance < min_distance:
-                min_distance = distance
-                closest_room = room
-
-        return closest_room
     
     obj_room_mapping = {}
     for obj_name, translation in object_trans_dict.items():
@@ -437,7 +309,7 @@ def map_objects_to_rooms(object_trans_dict, room_bounds_mapping):
         if room:
             obj_room_mapping[obj_name] = [translation[0], room]
         else:
-            closest_room = find_closest_room(translation[1], room_bounds_mapping)
+            closest_room, _ = find_closest_room(translation[1], room_bounds_mapping)
             if closest_room:
                 obj_room_mapping[obj_name] = [translation[0], closest_room]
     
@@ -462,7 +334,7 @@ def map_single_object_to_room(object_translation, room_bounds_mapping):
             center_z = (min_bounds[2] + max_bounds[2]) / 2
             return room, (center_x, 0, center_z)
     
-    return None
+    return find_closest_room(object_translation, room_bounds_mapping)
 
 
 def select_pick_place_obj(env, scene_id, pick_obj_idx, place_obj_idx):
@@ -534,65 +406,96 @@ def pick_up(env, humanoid_controller, pick_obj_id, pick_object_trans):
 
 def walk_to(env, predicate_idx, humanoid_controller, object_trans, object_bb, obj_trans_dict, room_dict):
     # https://github.com/facebookresearch/habitat-lab/issues/1913
+    # TODO: sometimes the articulated agents are in collision with the scene during path planning
+    # causing [16:46:35:943864]:[Error]:[Nav] PathFinder.cpp(1324)::getRandomNavigablePointInCircle : Failed to getRandomNavigablePoint.  Try increasing max tries if the navmesh is fine but just hard to sample from here
+    # as a dirty solution, the checking logic is modified in habitat/tasks/rearrange/actions/oracle_nav_actions: place_agent_at_dist_from_pos --> habitat/tasks/rearrange/utils: _get_robot_spawns;
     original_object_trans = object_trans
     initial_observations_length = len(observations)
     obj_room, room_trans = map_single_object_to_room(object_trans, room_dict)
 
     if predicate_idx == 0:
         env.sim.agents_mgr[1].articulated_agent.base_pos = mn.Vector3(room_trans)
+    original_robot_pos = env.sim.agents_mgr[0].articulated_agent.base_pos
+    original_robot_rot = env.sim.agents_mgr[0].articulated_agent.base_rot
     original_human_pos = env.sim.agents_mgr[1].articulated_agent.base_pos
     original_human_rot = env.sim.agents_mgr[1].articulated_agent.base_rot
     humanoid_controller.reset(env.sim.agents_mgr[1].articulated_agent.base_transformation)  # This line is important
 
     # Walk towards the object to place
-    agent_displ = np.inf
-    prev_agent_displ = -np.inf
-    agent_rot = np.inf
-    prev_agent_rot = -np.inf
-    prev_rot = env.sim.agents_mgr[1].articulated_agent.base_rot
-    prev_pos = env.sim.agents_mgr[1].articulated_agent.base_pos
+    human_displ = np.inf
+    prev_human_displ = -np.inf
+    human_angdiff = np.inf
+    prev_human_angdiff = -np.inf
+    prev_human_pos = env.sim.agents_mgr[1].articulated_agent.base_pos
+    prev_human_rot = env.sim.agents_mgr[1].articulated_agent.base_rot
     width, height, depth = calculate_bounding_box_size(object_bb)
-    threshold = max(width, depth)  # setting the threhold to be exactly object's radius (max(width, depth)/2) causes collision
- 
-    while agent_displ > threshold or agent_rot > 1e-3:  # TODO: change from threshold of 1e-9 to 1e-3 avoids the OOM issue 
-        prev_rot = env.sim.agents_mgr[1].articulated_agent.base_rot
-        prev_pos = env.sim.agents_mgr[1].articulated_agent.base_pos
+    human_threshold = max(width, depth)  # setting the threhold to be exactly object's radius (max(width, depth) / 2) causes collision
+    robot_threshold = 3.0
+    
+    while human_displ > human_threshold or human_angdiff > 1e-3:  # TODO: change from human_threshold of 1e-9 to 1e-3 avoids the OOM issue 
+        prev_human_pos = env.sim.agents_mgr[1].articulated_agent.base_pos
+        prev_human_rot = env.sim.agents_mgr[1].articulated_agent.base_rot
+        prev_robot_pos = env.sim.agents_mgr[0].articulated_agent.base_pos
+        prev_robot_rot = env.sim.agents_mgr[0].articulated_agent.base_rot
+
+        if (env.sim.agents_mgr[0].articulated_agent.base_pos - prev_human_pos).length() > robot_threshold:
+            action_dict = {
+                "action": ("agent_1_humanoid_navigate_action", "agent_0_oracle_coord_action"),  
+                "action_args": {
+                    "agent_1_oracle_nav_lookat_action": object_trans,
+                    "agent_1_mode": 1,
+                    "agent_0_oracle_nav_lookat_action": object_trans,
+                    "agent_0_mode": 1
+                }
+            }
+        else:
+            action_dict = {
+                "action": ("agent_1_humanoid_navigate_action"),  
+                "action_args": {
+                    "agent_1_oracle_nav_lookat_action": object_trans,
+                    "agent_1_mode": 1
+                }
+            }
+        
+        observations.append(env.step(action_dict))
+    
+        human_room, room_trans = map_single_object_to_room(env.sim.agents_mgr[1].articulated_agent.base_pos, room_dict)
+        if obj_room != human_room and human_displ <= human_threshold:
+            del observations[initial_observations_length:]
+            env.sim.agents_mgr[0].articulated_agent.base_pos = original_robot_pos
+            env.sim.agents_mgr[0].articulated_agent.base_rot = original_robot_rot         
+            env.sim.agents_mgr[1].articulated_agent.base_pos = original_human_pos
+            env.sim.agents_mgr[1].articulated_agent.base_rot = original_human_rot
+            object_trans = env.sim.pathfinder.get_random_navigable_point_near(circle_center=original_object_trans, radius=human_threshold, island_index=-1)
+            # vec_sample_obj = original_object_trans - sample
+        
+        if prev_human_displ == human_displ and prev_human_angdiff == human_angdiff:
+            human_threshold += 0.1
+
+        prev_human_displ = human_displ
+        prev_human_angdiff = human_angdiff
+        cur_human_pos = env.sim.agents_mgr[1].articulated_agent.base_pos
+        cur_human_rot = env.sim.agents_mgr[1].articulated_agent.base_rot
+        human_displ = (cur_human_pos - object_trans).length()  # human_displ = (cur_human_pos - prev_human_pos).length()
+        human_angdiff = np.inf if (obj_room != human_room and human_displ <= human_threshold) else np.abs(cur_human_rot - prev_human_rot)
+
+
+    robot_room, room_trans = map_single_object_to_room(env.sim.agents_mgr[0].articulated_agent.base_pos, room_dict)
+    while ((env.sim.agents_mgr[0].articulated_agent.base_pos - cur_human_pos).length() > robot_threshold or np.abs(env.sim.agents_mgr[0].articulated_agent.base_rot - prev_robot_rot) > 1e-3) or robot_room != obj_room:
+        prev_robot_pos = env.sim.agents_mgr[0].articulated_agent.base_pos
+        prev_robot_rot = env.sim.agents_mgr[0].articulated_agent.base_rot
+        
         action_dict = {
-            "action": ("agent_1_humanoid_navigate_action", "agent_0_oracle_coord_action"),  
+            "action": ("agent_0_oracle_coord_action"),  
             "action_args": {
-                "agent_1_oracle_nav_lookat_action": object_trans,
-                "agent_1_mode": 1,
-                "agent_0_oracle_nav_lookat_action": prev_pos,
+                "agent_0_oracle_nav_lookat_action": object_trans,
                 "agent_0_mode": 1
             }
         }
         observations.append(env.step(action_dict))
-    
-        human_room, room_trans = map_single_object_to_room(env.sim.agents_mgr[1].articulated_agent.base_pos, room_dict)
-        if obj_room != human_room and agent_displ <= threshold:
-            del observations[initial_observations_length:]
-            env.sim.agents_mgr[1].articulated_agent.base_pos = original_human_pos
-            env.sim.agents_mgr[1].articulated_agent.base_rot = original_human_rot
-            object_trans = env.sim.pathfinder.get_random_navigable_point_near(circle_center=original_object_trans, radius=threshold, island_index=-1)
-            # vec_sample_obj = original_object_trans - sample
-            # print()
-            # print(object_trans)
 
-        if prev_agent_displ == agent_displ and prev_agent_rot == agent_rot:
-            threshold += 0.1
-
-        prev_agent_displ = agent_displ
-        prev_agent_rot = agent_rot
-        cur_rot = env.sim.agents_mgr[1].articulated_agent.base_rot
-        cur_pos = env.sim.agents_mgr[1].articulated_agent.base_pos
-        agent_displ = (cur_pos - object_trans).length()  # agent_displ = (cur_pos - prev_pos).length()
-        agent_rot = np.inf if (obj_room != human_room and agent_displ <= threshold) else np.abs(cur_rot - prev_rot)
-            
-
-    # Wait
-    for _ in range(20):
-        action_dict = {"action": (), "action_args": {}}
-        observations.append(env.step(action_dict))
+        if prev_robot_pos == env.sim.agents_mgr[0].articulated_agent.base_pos and robot_room == obj_room: break
+        robot_room, room_trans = map_single_object_to_room(env.sim.agents_mgr[0].articulated_agent.base_pos, room_dict)
 
 
 def move_hand_and_place(env, humanoid_controller, place_obj_id, place_object_trans, max_reach=0.809):
@@ -655,8 +558,10 @@ def customized_humanoid_motion(env, convert_helper, folder_dict, motion_pkl_path
     # TODO: sometimes the articulated agents are violating the hold constraint,
     # causing AssertionError: Episode over, call reset before calling step
     # as a dirty solution, the checking logic is disabled in habitat/core/env: _update_step_stats --> habitat/tasks/rearrange/rearrange_task: _check_episode_is_active;
+    create_motion_sets(npy_file_folder_list, human_urdf_path, sample_motion=os.path.splitext(os.path.basename(motion_pkl_path))[0], update=True)
     motion_npz_path = motion_pkl_path.replace('.pkl', '.npz')
     motion_folder = get_motion_pkl_path(motion_pkl_path, folder_dict)
+
     # human_rot is added to avoid the human agent looking at a different direction suddenly, when transitioning from rearrange to seq_pose controller
     # TODO: with the above implemented, sometimes the human will do motion facing an opposite direction, or do nothing
     # the above situation usually happens when human is very close to the scene objects/robot, so suspect collision is the reason
@@ -696,7 +601,9 @@ def execute_humanoid_1(env, extracted_planning, motion_sets_list, obj_room_mappi
     planning = extracted_planning[list(extracted_planning.keys())[0]]["Predicates"]
 
     for i, step in enumerate(planning):  # planning for each predicate
-        # if i != 0: continue
+        # if i < 1: continue
+        initial_observations_length = len(observations)
+
         obj_trans_dict_to_search = static_obj_trans_dict  # only dynamic object can be picked or placed
         object_trans, object_bb = None, None
         for name, (obj_id, trans, bb) in obj_trans_dict_to_search.items():
@@ -727,8 +634,9 @@ def execute_humanoid_1(env, extracted_planning, motion_sets_list, obj_room_mappi
             elif step[0] == 3:
                 move_hand_and_place(env, humanoid_rearrange_controller, step[1], object_trans)
         print("step done")
-   
+
         # make_videos(output_dir)
+        # del observations[initial_observations_length:]
         # extract_frames(os.path.join(output_dir, "human_third_rgb_video.mp4"), os.path.join(output_dir, "human_third_rgb_video"))
     
     make_videos(output_dir)
@@ -807,14 +715,14 @@ if __name__ == "__main__":
 
     # Define the robot agent configuration
     robot_agent_config = AgentConfig()
-    urdf_path = os.path.join(data_path, "robots/hab_fetch/robots/hab_fetch.urdf")
-    robot_agent_config.articulated_agent_urdf = urdf_path
+    robot_urdf_path = os.path.join(data_path, "robots/hab_fetch/robots/hab_fetch.urdf")
+    robot_agent_config.articulated_agent_urdf = robot_urdf_path
     robot_agent_config.articulated_agent_type = "FetchRobot"
 
     # Define the human agent configuration
     human_agent_config = AgentConfig()
-    urdf_path = os.path.join(data_path, "hab3_bench_assets/humanoids/female_0/female_0.urdf")
-    human_agent_config.articulated_agent_urdf = urdf_path
+    human_urdf_path = os.path.join(data_path, "hab3_bench_assets/humanoids/female_0/female_0.urdf")
+    human_agent_config.articulated_agent_urdf = human_urdf_path
     human_agent_config.articulated_agent_type = "KinematicHumanoid"
     human_agent_config.motion_data_path = os.path.join(data_path, "hab3_bench_assets/humanoids/female_0/female_0_motion_data_smplx.pkl")
     robot_agent_config.motion_data_path = os.path.join(data_path, "hab3_bench_assets/humanoids/female_0/female_0_motion_data_smplx.pkl")  # placeholder
@@ -827,7 +735,7 @@ if __name__ == "__main__":
     #                         os.path.join(data_path, "humanoids/humanoid_data/perform_motion")]
     npy_file_folder_list = [os.path.join(data_path, "humanoids/humanoid_data/all_motion")]
                             
-    motion_sets_list, motion_dict, folder_dict, convert_helper = create_motion_sets(npy_file_folder_list, urdf_path, update=True)
+    motion_sets_list, motion_dict, folder_dict, convert_helper = create_motion_sets(npy_file_folder_list, human_urdf_path, update=False)
     print()
     print()
     print(f"Motion List Size: {len(motion_sets_list)}")
@@ -862,7 +770,6 @@ if __name__ == "__main__":
         
     env.reset()
     observations = []
-    # set_agents_base_pos(env, mn.Vector3(0, 0.180179, 0), mn.Vector3(0, 0.180179, 0))
     room_dict, static_obj_trans_dict, dynamic_obj_trans_dict, static_obj_room_mapping, dynamic_obj_room_mapping, aom, rom = select_pick_place_obj(env, scene_id, 0, 0)
     room_list = list(room_dict.keys())
 
@@ -917,7 +824,7 @@ if __name__ == "__main__":
         human_conversation_hist = predicates_proposal_gpt4(data_path, i, scene_id, times, sampled_motion_list, sampled_static_obj_dict_list, dynamic_obj_room_mapping, profile_string_partial, human_conversation_hist, temperature_dict, model_dict, start_over=False)
         human_conversation_hist = predicates_reflection_gpt4(data_path, i, scene_id, times, sampled_motion_list, sampled_static_obj_dict_list, dynamic_obj_room_mapping, profile_string_partial, human_conversation_hist, temperature_dict, model_dict, start_over=False)
 
-        selected_time = "9 am"
+        selected_time = "4 pm"
         for j, time_ in enumerate(times):
             if time_ == selected_time:
                 break
