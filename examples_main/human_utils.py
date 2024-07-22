@@ -176,7 +176,7 @@ def convert_npy_to_npz(npy_file_path, output_npz_path):
     return saved_npz_keys, saved_npz_shapes
 
 
-def create_motion_sets(npy_file_folder_list, human_urdf_path, sample_motion=None, update=True):
+def create_motion_sets(npy_file_folder_list, human_urdf_path, sample_motion=None, update=False):
     # motion_npz_path = os.path.join(data_path, "humanoids/humanoid_data/walk_motion/CMU_10_04_stageii.npz")
     # motion_pkl_path = os.path.join(data_path, "humanoids/humanoid_data/walk_motion/CMU_10_04_stageii.pkl")
     motion_sets_list, motion_pkl_path_list, folder_list = [], [], []
@@ -268,8 +268,8 @@ def sample_obj_by_similarity(conversation_hist, object_dict, top_k=30):
         top_indices = np.argsort(-sim)[:top_k]  # Get indices of top K similarities
         sampled_objects = {object_names[idx]: object_dict[object_names[idx]] for idx in top_indices}
         sampled_objects_dict_list.append(sampled_objects)
-        print(sampled_objects)
-        print()
+        # print()
+        # print(sampled_objects)
 
     return times, intention_sentences, sampled_objects_dict_list
 

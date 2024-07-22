@@ -4,6 +4,7 @@ import warnings
 import logging
 import io
 import sys
+import glob
 from habitat.tasks.rearrange.rearrange_sim import RearrangeSim
 warnings.filterwarnings('ignore')
 from habitat_sim.utils.settings import make_cfg
@@ -42,7 +43,7 @@ import copy
 import random
 import torch
 import pathlib
-import time
+import time, datetime
 
 import git, os
 repo = git.Repo(".", search_parent_directories=True)
@@ -163,28 +164,28 @@ def make_videos(output_dir):
         observations,
         "agent_0_head_rgb",
         "color",
-        os.path.join(output_dir, "robot_scene_camera_rgb_video.mp4"),
+        os.path.join(output_dir, f"robot_scene_camera_rgb_video.mp4"),
         open_vid=False,  # Ensure this is set to False to prevent video from popping up
     )
     vut.make_video(
         observations,
         "agent_0_third_rgb",
         "color",
-        os.path.join(output_dir, "robot_third_rgb_video.mp4"),
+        os.path.join(output_dir, f"robot_third_rgb_video.mp4"),
         open_vid=False,
     )
     vut.make_video(
         observations,
         "agent_1_head_rgb",
         "color",
-        os.path.join(output_dir, "human_scene_camera_rgb_video.mp4"),
+        os.path.join(output_dir, f"human_scene_camera_rgb_video.mp4"),
         open_vid=False, 
     )
     vut.make_video(
         observations,
         "agent_1_third_rgb",
         "color",
-        os.path.join(output_dir, "human_third_rgb_video.mp4"),
+        os.path.join(output_dir, f"human_third_rgb_video.mp4"),
         open_vid=False,
     )
     # TODO: top perspective takes the most memory, aften OOM if resolution = 1024 x 768
@@ -193,7 +194,7 @@ def make_videos(output_dir):
         observations,
         "agent_1_top_rgb",
         "color",
-        os.path.join(output_dir, "top_scene_camera_rgb_video.mp4"),
+        os.path.join(output_dir, f"top_scene_camera_rgb_video.mp4"),
         open_vid=False,  # Ensure this is set to False to prevent video from popping up
     )
 
@@ -415,6 +416,7 @@ def walk_to(env, predicate_idx, humanoid_controller, object_trans, object_bb, ob
 
     if predicate_idx == 0:
         env.sim.agents_mgr[1].articulated_agent.base_pos = mn.Vector3(room_trans)
+        env.sim.agents_mgr[0].articulated_agent.base_pos = env.sim.pathfinder.get_random_navigable_point_near(circle_center=mn.Vector3(room_trans), radius=8.0, island_index=-1)
     original_robot_pos = env.sim.agents_mgr[0].articulated_agent.base_pos
     original_robot_rot = env.sim.agents_mgr[0].articulated_agent.base_rot
     original_human_pos = env.sim.agents_mgr[1].articulated_agent.base_pos
@@ -429,8 +431,8 @@ def walk_to(env, predicate_idx, humanoid_controller, object_trans, object_bb, ob
     prev_human_pos = env.sim.agents_mgr[1].articulated_agent.base_pos
     prev_human_rot = env.sim.agents_mgr[1].articulated_agent.base_rot
     width, height, depth = calculate_bounding_box_size(object_bb)
-    human_threshold = max(width, depth)  # setting the threhold to be exactly object's radius (max(width, depth) / 2) causes collision
-    robot_threshold = 3.0
+    human_threshold = min(width, depth) / 2.5  # this is hard to adjust
+    robot_threshold_init, robot_threshold_sec = 3., 2.0  # this is hard to adjust
     
     while human_displ > human_threshold or human_angdiff > 1e-3:  # TODO: change from human_threshold of 1e-9 to 1e-3 avoids the OOM issue 
         prev_human_pos = env.sim.agents_mgr[1].articulated_agent.base_pos
@@ -438,7 +440,7 @@ def walk_to(env, predicate_idx, humanoid_controller, object_trans, object_bb, ob
         prev_robot_pos = env.sim.agents_mgr[0].articulated_agent.base_pos
         prev_robot_rot = env.sim.agents_mgr[0].articulated_agent.base_rot
 
-        if (env.sim.agents_mgr[0].articulated_agent.base_pos - prev_human_pos).length() > robot_threshold:
+        if (env.sim.agents_mgr[0].articulated_agent.base_pos - prev_human_pos).length() > robot_threshold_init:
             action_dict = {
                 "action": ("agent_1_humanoid_navigate_action", "agent_0_oracle_coord_action"),  
                 "action_args": {
@@ -481,14 +483,15 @@ def walk_to(env, predicate_idx, humanoid_controller, object_trans, object_bb, ob
 
 
     robot_room, room_trans = map_single_object_to_room(env.sim.agents_mgr[0].articulated_agent.base_pos, room_dict)
-    while ((env.sim.agents_mgr[0].articulated_agent.base_pos - cur_human_pos).length() > robot_threshold or np.abs(env.sim.agents_mgr[0].articulated_agent.base_rot - prev_robot_rot) > 1e-3) or robot_room != obj_room:
+    robot_human_displ = max((env.sim.agents_mgr[0].articulated_agent.base_pos - cur_human_pos).length() - robot_threshold_sec, 0)
+    while ((env.sim.agents_mgr[0].articulated_agent.base_pos - cur_human_pos).length() > robot_human_displ or np.abs(env.sim.agents_mgr[0].articulated_agent.base_rot - prev_robot_rot) > 1e-3) or robot_room != obj_room:
         prev_robot_pos = env.sim.agents_mgr[0].articulated_agent.base_pos
         prev_robot_rot = env.sim.agents_mgr[0].articulated_agent.base_rot
         
         action_dict = {
             "action": ("agent_0_oracle_coord_action"),  
             "action_args": {
-                "agent_0_oracle_nav_lookat_action": object_trans,
+                "agent_0_oracle_nav_lookat_action": cur_human_pos,
                 "agent_0_mode": 1
             }
         }
@@ -592,17 +595,17 @@ def customized_humanoid_motion(env, convert_helper, folder_dict, motion_pkl_path
         observations.append(env.step(action_dict))
 
 
-def execute_humanoid_1(env, extracted_planning, motion_sets_list, obj_room_mapping, obj_trans_dict, room_dict):
+def execute_humanoid_1(env, human_id, time_, extracted_planning, motion_sets_list, obj_room_mapping, obj_trans_dict, room_dict):
     # TODO: Using sudo dmesg -T, the process is sometimes killed because OOM Killer. 
     # The reason is likely to be for some free-form motion, the robot planned path towards an object is never found / the robot is in collision with the scene, and increases computation overhead.
     # When rendering the videos, it causes OOM Killer.
     static_obj_room_mapping, dynamic_obj_room_mapping = obj_room_mapping[0], obj_room_mapping[1]
     static_obj_trans_dict, dynamic_obj_trans_dict = obj_trans_dict[0], obj_trans_dict[1]
-    planning = extracted_planning[list(extracted_planning.keys())[0]]["Predicates"]
+    planning = extracted_planning[list(extracted_planning.keys())[0]]["Predicate_Acts"]
 
     for i, step in enumerate(planning):  # planning for each predicate
-        # if i < 1: continue
-        initial_observations_length = len(observations)
+        if i != 0: continue  # the first predicate
+        # initial_observations_length = len(observations)
 
         obj_trans_dict_to_search = static_obj_trans_dict  # only dynamic object can be picked or placed
         object_trans, object_bb = None, None
@@ -627,19 +630,23 @@ def execute_humanoid_1(env, extracted_planning, motion_sets_list, obj_room_mappi
             customized_humanoid_motion(env, convert_helper, folder_dict, get_motion_pkl_path(selected_motion, motion_dict))
             print()
             print(selected_motion)
-            print()
         else:
             if step[0] == 2:
                 pick_up(env, humanoid_rearrange_controller, step[1], object_trans)
             elif step[0] == 3:
                 move_hand_and_place(env, humanoid_rearrange_controller, step[1], object_trans)
         print("step done")
-
-        # make_videos(output_dir)
+        print()
+        
+        ts = time.time()
+        time_string = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d-%H-%M-%S')
+        video_dir = os.path.join(output_dir, f"human/{human_id}/{time_string}_{time_}")
+        os.makedirs(video_dir, exist_ok=True)
+        with open(os.path.join(video_dir, f"{selected_motion}.txt"), 'w') as file: file.write(selected_motion)
+        make_videos(video_dir)
+        extract_frames(os.path.join(video_dir, f"robot_scene_camera_rgb_video.mp4"), os.path.join(video_dir, f"robot_scene_camera_rgb_video"))
+        extract_frames(os.path.join(video_dir, f"human_third_rgb_video.mp4"), os.path.join(video_dir, f"human_third_rgb_video"))
         # del observations[initial_observations_length:]
-        # extract_frames(os.path.join(output_dir, "human_third_rgb_video.mp4"), os.path.join(output_dir, "human_third_rgb_video"))
-    
-    make_videos(output_dir)
 
 
 def read_human_data():
@@ -757,19 +764,8 @@ if __name__ == "__main__":
     scene_id = "103997919_171031233"
     agent_dict = {"agent_0": robot_agent_config, "agent_1": human_agent_config}
     env = create_agent_action(agent_dict, scene_id)
-
-    # query the observation of each of the agents
-    # without this will cause: AssertionError: Episode over, call reset before calling step
-    observations = env.reset()
-    _, ax = plt.subplots(1, len(observations.keys()))
-    for ind, name in enumerate(observations.keys()):
-        ax[ind].imshow(observations[name])
-        ax[ind].set_axis_off()
-        ax[ind].set_title(name)
-
-        
     env.reset()
-    observations = []
+    
     room_dict, static_obj_trans_dict, dynamic_obj_trans_dict, static_obj_room_mapping, dynamic_obj_room_mapping, aom, rom = select_pick_place_obj(env, scene_id, 0, 0)
     room_list = list(room_dict.keys())
 
@@ -805,9 +801,9 @@ if __name__ == "__main__":
       "intention_proposal": "gpt-4o",
       "predicates_proposal": "gpt-4o",
       "predicates_reflection": "gpt-4o",
-      "intention_discovery": "gpt-4o",
-      "predicates_discovery": "gpt-4o",
-      "collaboration_proposal": "gpt-4o"
+      "intention_discovery": "gpt-4o-mini",
+      "predicates_discovery": "gpt-4o-mini",
+      "collaboration_proposal": "gpt-4o-mini"
     }
 
     profile_string_complete_list, profile_string_partial_list = read_human_data()
@@ -820,24 +816,43 @@ if __name__ == "__main__":
         times, intention_sentences, sampled_static_obj_dict_list = sample_obj_by_similarity(human_conversation_hist, static_obj_room_mapping, top_k=30)
         _, sampled_motion_list = sample_motion_by_similarity(human_conversation_hist, motion_sets_list, top_k=5)
 
-
         human_conversation_hist = predicates_proposal_gpt4(data_path, i, scene_id, times, sampled_motion_list, sampled_static_obj_dict_list, dynamic_obj_room_mapping, profile_string_partial, human_conversation_hist, temperature_dict, model_dict, start_over=False)
         human_conversation_hist = predicates_reflection_gpt4(data_path, i, scene_id, times, sampled_motion_list, sampled_static_obj_dict_list, dynamic_obj_room_mapping, profile_string_partial, human_conversation_hist, temperature_dict, model_dict, start_over=False)
 
-        selected_time = "4 pm"
         for j, time_ in enumerate(times):
-            if time_ == selected_time:
-                break
+            # query the observation of each of the agents
+            # without this will cause: AssertionError: Episode over, call reset before calling step
+            observations = env.reset()
+            _, ax = plt.subplots(1, len(observations.keys()))
+            for ind, name in enumerate(observations.keys()):
+                ax[ind].imshow(observations[name])
+                ax[ind].set_axis_off()
+                ax[ind].set_title(name)
 
-        extracted_planning = extract_code("predicates_reflection", pathlib.Path(data_path) / "gpt4_response" / "human/predicates_reflection" / scene_id / str(i).zfill(5), j)
+                
+            env.reset()
+            observations = []
 
-        execute_humanoid_1(env, extracted_planning, motion_sets_list, [static_obj_room_mapping, dynamic_obj_room_mapping], [static_obj_trans_dict, dynamic_obj_trans_dict], room_dict)
-        
-        # robot_conversation_hist = intention_discovery_gpt4(data_path, scene_id, time_, os.path.join(output_dir, "human_third_rgb_video"), temperature_dict, model_dict, start_over=False)
-        # # print(extracted_planning[f"Time: {selected_time}"]["Intention"])
-        # # if extract_confidence(robot_conversation_hist[0][1]) == "yes" or extract_confidence(robot_conversation_hist[0][1]) == "Yes":
-        
-        # robot_conversation_hist = predicates_discovery_gpt4(data_path, scene_id, time_, robot_conversation_hist, temperature_dict, model_dict, start_over=False)
-        # thought, act = extract_thoughts_and_acts(robot_conversation_hist[1][1])
-        # predicate = extract_predicates(robot_conversation_hist[0][1])[0]
-        # human_conversation_hist = collaboration_proposal_gpt4(data_path, scene_id, time_, sampled_motion_list[3], extracted_planning, predicate, thought, act, human_conversation_hist, temperature_dict, model_dict, start_over=False)
+            extracted_planning = extract_code("predicates_reflection", pathlib.Path(data_path) / "gpt4_response" / "human/predicates_reflection" / scene_id / str(i).zfill(5), j)
+            # execute_humanoid_1(env, str(i).zfill(5), time_, extracted_planning, motion_sets_list, [static_obj_room_mapping, dynamic_obj_room_mapping], [static_obj_trans_dict, dynamic_obj_trans_dict], room_dict)
+
+            video_dir_search_pattern = os.path.join(output_dir, f"human/{str(i).zfill(5)}/*_{time_}")
+            video_dir = glob.glob(video_dir_search_pattern)[0]
+            robot_conversation_hist = intention_discovery_gpt4(data_path, i, scene_id, [j, time_], [os.path.join(video_dir, "robot_scene_camera_rgb_video"), os.path.join(video_dir, "human_third_rgb_video")], temperature_dict, model_dict, start_over=False)
+            _, _, sampled_static_obj_dict = sample_obj_by_similarity(robot_conversation_hist, static_obj_room_mapping, top_k=30)
+   
+            robot_conversation_hist = predicates_discovery_gpt4(data_path, i, scene_id, [j, time_], sampled_static_obj_dict, dynamic_obj_room_mapping, robot_conversation_hist, temperature_dict, model_dict, start_over=False)
+            robot_thought, robot_act = extract_thoughts_and_acts(robot_conversation_hist[1][1])
+
+            print()
+            print(time_)
+            print("Human Intention:", extracted_planning[f"Time: {time_}"]["Intention"])
+            print("Human Predicate Thoughts:",extracted_planning[f"Time: {time_}"]["Predicate_Thoughts"])
+            print("Human Predicate Acts:",extracted_planning[f"Time: {time_}"]["Predicate_Acts"])
+            print()
+            print("Robot Intention:", extract_intentions(robot_conversation_hist[0][1])[0])
+            print("Robot Predicate Thoughts:", robot_thought)
+            print("Robot Predicate Acts:", robot_act)
+            print()
+
+            # human_conversation_hist = collaboration_proposal_gpt4(data_path, scene_id, time_, sampled_motion_list[3], extracted_planning, predicate, thought, act, human_conversation_hist, temperature_dict, model_dict, start_over=False)

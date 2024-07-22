@@ -419,7 +419,8 @@ class MotionConverterSMPLX:
         #     y_angle_diff -= np.pi
         # else:
         #     y_angle_diff += np.pi
-        y_angle_diff += np.pi
+
+        # y_angle_diff += np.pi
 
         # Create a rotation matrix for the y angle difference
         if reverse:

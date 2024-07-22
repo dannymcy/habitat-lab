@@ -8,17 +8,17 @@ from habitat.gpt.prompts.utils import *
 from habitat.gpt.query import query
 
 
-def discover_predicates_prompt(time_, intention, predicate):
+def discover_predicates_prompt(time_, intention, obj_room_mapping):
     contents = f"""
     Input:
     1.  Human activity: {intention} at time: {time_}.
-    2.  First predicate of this activity: {predicate}.
+    2.  A dict mapping rigid, static objects to their IDs and rooms: {obj_room_mapping[0]}.
 
     You are a robot assisting a human.
     Instructions:
-    1.  Break down the human activity into several (2 to 5) predicates.
-    2.	Predicate type: Deliver objects to the human.
-    3.  Provide objects from a magical box. Objects should be small and handable.
+    1.  Break down the human activity into 5 predicates.
+    2.	Predicate type: Deduce the human's activities and provide objects.
+    3.  Provide small, handable objects from a magical box. Objects in the dict are static thus cannot be used.
     4. 	All objects are rigid and cannot deform, disassemble, or transform.
 
     Write in the following format. Do not output anything else:
@@ -30,18 +30,18 @@ def discover_predicates_prompt(time_, intention, predicate):
 
     Examples:
     Predicates: 
-    1. Thought: Human is brushing teeth. He may apply cream on the face. Act: [obj_name: face_cream]
-    2. Thought: Human is brushing teeth. He may dry hair later. Act: [obj_name: hair_dryer]
+    1. Thought: Human may apply cream on the face. Act: [obj_name: face_cream]
+    2. Thought: Human may dry hair. Act: [obj_name: hair_dryer]
     """
     return contents
 
 
-def discover_predicates(time_, output_path, existing_response=None, temperature_dict=None, 
+def discover_predicates(time_, obj_room_mapping, output_path, existing_response=None, temperature_dict=None, 
                   model_dict=None, conversation_hist=None):
 
     intention = extract_intentions(conversation_hist[0][1])[0]
-    predicate = extract_predicates(conversation_hist[0][1])[0]
-    predicates_user_contents_filled = discover_predicates_prompt(time_, intention, predicate)
+    # predicate = extract_predicates(conversation_hist[0][1])[0]
+    predicates_user_contents_filled = discover_predicates_prompt(time_, intention, obj_room_mapping)
 
     if existing_response is None:
         system = "You are a helpful assistant."

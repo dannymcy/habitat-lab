@@ -81,17 +81,17 @@ def extract_intentions(conversation_hist):
     return intentions
 
 
-def extract_predicates(conversation_hist):
-    """
-    Extract the predicate sentences from the conversation history.
-    """
-    predicates = []
-    lines = conversation_hist.split("\n")
-    for i in range(len(lines)):
-        if lines[i].startswith("Activity:"):
-            predicate = lines[i].replace("Activity:", "").strip()
-            predicates.append(predicate)
-    return predicates
+# def extract_predicates(conversation_hist):
+#     """
+#     Extract the predicate sentences from the conversation history.
+#     """
+#     predicates = []
+#     lines = conversation_hist.split("\n")
+#     for i in range(len(lines)):
+#         if lines[i].startswith("Activity:"):
+#             predicate = lines[i].replace("Activity:", "").strip()
+#             predicates.append(predicate)
+#     return predicates
 
 
 # def parse_planning_line(line):
@@ -212,6 +212,17 @@ def parse_act_line(line):
         act_parts_cleaned.append(value)
     
     return act_parts_cleaned
+
+
+def parse_thought_line(line):
+    """
+    Parse the 'Thought' part of a predicate into a list.
+    """
+    thought_start = line.find("Thought: ") + len("Thought: ")
+    act_start = line.find("Act: [", thought_start)
+    thought_content = line[thought_start:act_start].strip()
+    
+    return [thought_content]
     
 
 def extract_code(prompt_name, prompt_path, file_idx, video_path=None, scene_id=None):
@@ -234,7 +245,8 @@ def extract_code(prompt_name, prompt_path, file_idx, video_path=None, scene_id=N
         time = lines[0].strip()  # First line is the time
         intention = lines[1].replace("Intention: ", "").strip()  # Second line is the intention
         
-        predicates = []
+        predicate_acts = []
+        predicate_thoughts = []
         planning_section = False
 
         for line in lines[2:]:
@@ -248,25 +260,28 @@ def extract_code(prompt_name, prompt_path, file_idx, video_path=None, scene_id=N
             if planning_section:
                 if line.strip() != "":
                     act_list = parse_act_line(line.strip())
-                    predicates.append(act_list)
+                    thought_list = parse_thought_line(line.strip())
+                    predicate_acts.append(act_list)
+                    predicate_thoughts.append(thought_list)
 
         result_dict[time] = {
             "Intention": intention,
-            "Predicates": predicates
+            "Predicate_Acts": predicate_acts,
+            "Predicate_Thoughts": predicate_thoughts
         }
 
         return result_dict
 
 
-def extract_confidence(text):
-    """
-    Extract the confidence from the given text.
-    """
-    lines = text.split('\n')
-    for line in lines:
-        if line.startswith("Confidence:"):
-            return line.replace("Confidence:", "").strip()
-    return None
+# def extract_confidence(text):
+#     """
+#     Extract the confidence from the given text.
+#     """
+#     lines = text.split('\n')
+#     for line in lines:
+#         if line.startswith("Confidence:"):
+#             return line.replace("Confidence:", "").strip()
+#     return None
 
 
 def extract_thoughts_and_acts(text):

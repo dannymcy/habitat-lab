@@ -200,30 +200,32 @@ def calculate_bounding_box_size(bounding_box):
     return width, height, depth  # not sure about the order
 
     
-def intention_discovery_gpt4(data_path, scene_id, time_, video_dir, temperature_dict, model_dict, start_over=False):
-    output_dir = pathlib.Path(data_path) / "gpt4_response" / "robot/intention_discovery" / scene_id
+def intention_discovery_gpt4(data_path, human_id, scene_id, time_tuple, video_dirs, temperature_dict, model_dict, start_over=False):
+    output_dir = pathlib.Path(data_path) / "gpt4_response" / "robot/intention_discovery" / scene_id / str(human_id).zfill(5)
     os.makedirs(output_dir, exist_ok=True)
+    file_idx, time_ = time_tuple
     conversation_hist = []
 
     if start_over:
-        user, res = discover_intention(time_, video_dir, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=None)
+        user, res = discover_intention(time_, video_dirs, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=None)
         time.sleep(20)
     else:
-        user, res = discover_intention(time_, video_dir, output_dir, existing_response=load_response("intention_discovery", output_dir), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=None)
+        user, res = discover_intention(time_, video_dirs, output_dir, existing_response=load_response("intention_discovery", output_dir, file_idx=file_idx), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=None)
     conversation_hist.append([user, res])
 
     return conversation_hist
     
 
-def predicates_discovery_gpt4(data_path, scene_id, time_, conversation_hist, temperature_dict, model_dict, start_over=False):
-    output_dir = pathlib.Path(data_path) / "gpt4_response" / "robot/predicates_discovery" / scene_id
+def predicates_discovery_gpt4(data_path, human_id, scene_id, time_tuple, sampled_static_obj_dict, dynamic_obj_room_mapping, conversation_hist, temperature_dict, model_dict, start_over=False):
+    output_dir = pathlib.Path(data_path) / "gpt4_response" / "robot/predicates_discovery" / scene_id / str(human_id).zfill(5)
     os.makedirs(output_dir, exist_ok=True)
+    file_idx, time_ = time_tuple
 
     if start_over:
-        user, res = discover_predicates(time_, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
+        user, res = discover_predicates(time_, [sampled_static_obj_dict, dynamic_obj_room_mapping], output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
         time.sleep(20)
     else:
-        user, res = discover_predicates(time_, output_dir, existing_response=load_response("predicates_discovery", output_dir), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
+        user, res = discover_predicates(time_, [sampled_static_obj_dict, dynamic_obj_room_mapping], output_dir, existing_response=load_response("predicates_discovery", output_dir, file_idx=file_idx), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
     conversation_hist.append([user, res])
 
     return conversation_hist
