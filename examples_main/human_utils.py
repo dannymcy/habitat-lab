@@ -63,6 +63,7 @@ dir_path = repo.working_tree_dir
 data_path = os.path.join(dir_path, "data")
 os.chdir(dir_path)
 
+from habitat.gpt.prompts.human.prompt_traits_summary import summarize_traits
 from habitat.gpt.prompts.human.prompt_intention_proposal import propose_intention
 from habitat.gpt.prompts.human.prompt_predicates_proposal import propose_predicates
 from habitat.gpt.prompts.human.prompt_predicates_reflection import reflect_predicates
@@ -73,18 +74,104 @@ from habitat.gpt.prompts.utils import load_response, extract_times, extract_inte
 from sentence_transformers import SentenceTransformer
 
 
+def calculate_recency_scores(times, selected_time, predicates_num, decay_factor=0.95):
+    # Find the index of the selected time
+    selected_index = times.index(selected_time)
+    
+    # Calculate the decaying scores
+    intentions_recency = []
+    for i in range(selected_index - 1, -1, -1):
+        recency = decay_factor ** (selected_index - 1 - i)
+        intentions_recency.append(recency)
+    
+    intentions_recency.reverse()
+    predicates_recency = [recency for recency in intentions_recency for _ in range(predicates_num)]
+    return intentions_recency, predicates_recency
 
 
-def intention_proposal_gpt4(data_path, human_id, scene_id, room_list, profile_string, temperature_dict, model_dict, start_over=False):
-    output_dir = pathlib.Path(data_path) / "gpt4_response" / "human/intention_proposal" / scene_id / str(human_id).zfill(5)
+def calculate_relevance_scores(gt_text, activity_list):
+    """
+    Compute similarity scores between a given text and a list of activities.
+    If activity_list is None, return None.
+    """
+    if not activity_list:
+        return []
+
+    def compute_similarity(gt_text, activity_list):
+        """
+        Compute semantic similarity between the given text and activities.
+        """
+        model = SentenceTransformer("all-MiniLM-L6-v2")
+        
+        # Encode the ground truth text and activity list
+        gt_embedding = model.encode([gt_text])  # Note the input is a list
+        activity_embeddings = model.encode(activity_list)
+        
+        # Compute similarities
+        similarities = np.dot(activity_embeddings, gt_embedding.T).flatten()  # Using dot product for cosine similarity
+        return similarities
+
+    # Compute similarity scores
+    similarities = compute_similarity(gt_text, activity_list)
+    
+    return similarities
+
+
+def retrieve_memory(gt_text, activity_list, times, selected_time, predicates_num, decay_factor=0.95, top_k=5, retrieve_type="intention"):
+    # Check if activity_list is None
+    if not activity_list:
+        return []
+
+    intentions_recency, predicates_recency = calculate_recency_scores(times, selected_time, predicates_num, decay_factor=0.95)
+    relevance_scores = calculate_relevance_scores(gt_text, activity_list)
+    recency_scores = intentions_recency if retrieve_type == "intention" else predicates_recency
+
+    if len(relevance_scores) != len(recency_scores):
+        raise ValueError("The lengths of relevance scores and recency scores must match.")
+    
+    combined_scores = [relevance * recency for relevance, recency in zip(relevance_scores, recency_scores)]
+
+    # Pair activities with their combined scores
+    activity_scores = list(zip(activity_list, combined_scores))
+
+    # Sort activities by combined score in descending order
+    activity_scores.sort(key=lambda x: x[1], reverse=True)
+
+    # Select the top_k activities, or all if there are fewer than top_k
+    top_activities = activity_scores[:top_k]
+
+    # Extract just the activities from the top_k list
+    top_activity_list = [activity for activity, score in top_activities]
+    
+    return top_activity_list
+
+
+def traits_summary_gpt4(data_path, human_id, scene_id, profile_string, temperature_dict, model_dict, start_over=False):
+    output_dir = pathlib.Path(data_path) / "gpt4_response" / "human/traits_summary" / str(human_id).zfill(5) / scene_id
     os.makedirs(output_dir, exist_ok=True)
     conversation_hist = []
 
     if start_over:
-        user, res = propose_intention(room_list, profile_string, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=None)
+        user, res = summarize_traits(profile_string, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=None)
         time.sleep(20)
     else:
-        user, res = propose_intention(room_list, profile_string, output_dir, existing_response=load_response("intention_proposal", output_dir), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=None)
+        user, res = summarize_traits(profile_string, output_dir, existing_response=load_response("traits_summary", output_dir), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=None)
+    conversation_hist.append([user, res])
+
+    return conversation_hist
+
+
+def intention_proposal_gpt4(data_path, human_id, scene_id, time_tuple, retrieved_intentions, room_list, profile_string, temperature_dict, model_dict, start_over=False):
+    output_dir = pathlib.Path(data_path) / "gpt4_response" / "human/intention_proposal" / str(human_id).zfill(5) / scene_id
+    os.makedirs(output_dir, exist_ok=True)
+    file_idx, time_ = time_tuple
+    conversation_hist = []
+
+    if start_over:
+        user, res = propose_intention(time_, room_list, profile_string, retrieved_intentions, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=None)
+        time.sleep(20)
+    else:
+        user, res = propose_intention(time_, room_list, profile_string, retrieved_intentions, output_dir, existing_response=load_response("intention_proposal", output_dir, file_idx=file_idx), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=None)
     conversation_hist.append([user, res])
 
     return conversation_hist
@@ -309,16 +396,17 @@ def sample_motion_by_similarity(conversation_hist, motion_list, top_k=5):
     return intention_sentences, sampled_motion_list
 
 
-def predicates_proposal_gpt4(data_path, human_id, scene_id, times, sampled_motion_list, sampled_static_obj_dict_list, dynamic_obj_room_mapping, profile_string, conversation_hist, temperature_dict, model_dict, start_over=False):
-    output_dir = pathlib.Path(data_path) / "gpt4_response" / "human/predicates_proposal" / scene_id / str(human_id).zfill(5)
+def predicates_proposal_gpt4(data_path, human_id, scene_id, time_tuple, retrieved_predicates, sampled_motion_list, sampled_static_obj_dict, dynamic_obj_room_mapping, profile_string, conversation_hist, temperature_dict, model_dict, start_over=False):
+    output_dir = pathlib.Path(data_path) / "gpt4_response" / "human/predicates_proposal" / str(human_id).zfill(5) / scene_id
     os.makedirs(output_dir, exist_ok=True)
+    file_idx, time_ = time_tuple
     
-    for i, time_ in enumerate(times):
-        if start_over:
-            user, res = propose_predicates(time_, sampled_motion_list, [sampled_static_obj_dict_list[i], dynamic_obj_room_mapping], profile_string, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
-            time.sleep(20)
-        else:
-            user, res = propose_predicates(time_, sampled_motion_list, [sampled_static_obj_dict_list[i], dynamic_obj_room_mapping], profile_string, output_dir, existing_response=load_response("predicates_proposal", output_dir), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
+    if start_over:
+        user, res = propose_predicates(time_, sampled_motion_list, [sampled_static_obj_dict, dynamic_obj_room_mapping], profile_string, retrieved_predicates, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
+        time.sleep(20)
+    else:
+        user, res = propose_predicates(time_, sampled_motion_list, [sampled_static_obj_dict, dynamic_obj_room_mapping], profile_string, retrieved_predicates, output_dir, existing_response=load_response("predicates_proposal", output_dir, file_idx=file_idx), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
+    conversation_hist.append([user, res])
 
     return conversation_hist
 
@@ -349,20 +437,6 @@ def predicates_reflection_gpt4(data_path, human_id, scene_id, times, sampled_mot
         conversation_hist = conversation_hist[:-1]
 
     return conversation_hist
-
-
-# def motion_planning_gpt4(data_path, scene_id, motion_sets_list, obj_room_mapping, conversation_hist, temperature_dict, model_dict, start_over=False):
-#     output_dir = pathlib.Path(data_path) / "gpt4_response" / "human/motion_planning" / scene_id
-#     os.makedirs(output_dir, exist_ok=True)
-    
-#     if start_over:
-#         user, res = plan_motion(motion_sets_list, obj_room_mapping, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
-#         time.sleep(20)
-#     else:
-#         user, res = plan_motion(motion_sets_list, obj_room_mapping, output_dir, existing_response=load_response("motion_planning", output_dir), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
-#     conversation_hist.append([user, res])
-
-#     return conversation_hist
 
 
 def most_similar_motion(free_motion, motion_list, top_k=1):

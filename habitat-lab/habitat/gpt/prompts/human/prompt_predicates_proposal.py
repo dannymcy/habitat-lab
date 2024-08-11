@@ -8,11 +8,12 @@ from habitat.gpt.prompts.utils import *
 from habitat.gpt.query import query
 
 
-def propose_predicates_prompt(time_, sampled_motion_list, obj_room_mapping, profile_string):
+def propose_predicates_prompt(time_, sampled_motion_list, obj_room_mapping, profile_string, retrieved_predicates):
     contents = f"""
     Input:
     1.  The proposed activity at time: {time_}.
-    2.	A dict mapping rigid, static objects to their IDs and rooms: {obj_room_mapping[0]}.
+    2.  Most relevant human predicates proposed at previous times: {retrieved_predicates} (if empty, ignore it—this means it's the first activity of the day).
+    3.	A dict mapping rigid, static objects to their IDs and rooms: {obj_room_mapping[0]}.
 
     You are a human living in the house.
 
@@ -23,8 +24,9 @@ def propose_predicates_prompt(time_, sampled_motion_list, obj_room_mapping, prof
     3.  For interacting with fixed, static objects, use only objects from the given static object dict. For objects in hand, a robot will provide them.
     4   Both interacting and inhand objects must be specified.
     5.  Predicates should be continuous and logical, and align with your profile.
-    6.  Free-form motion should be diverse. Examples: {sampled_motion_list}. Feel free to propose others.
-    7. 	All objects are rigid and cannot deform, disassemble, or transform.
+    6.  Predicates must have temporal dependence with the previous predicates.
+    7.  Free-form motion should be diverse. Examples: {sampled_motion_list}. Feel free to propose others.
+    8. 	All objects are rigid and cannot deform, disassemble, or transform.
 
     Write in the following format. Do not output anything else:
     Time: xxx am/pm
@@ -37,16 +39,16 @@ def propose_predicates_prompt(time_, sampled_motion_list, obj_room_mapping, prof
     Time: 10 am
     Intention: Leisure activity in the living room.
     Predicates:
-    1. Thought: Relaxing and enjoying a TV show, which aligns with my profile of enjoying entertainment. Act: [type: 1, inter_obj_id: 101, inter_obj_name: sofa, inhand_obj_name: remote control, motion: sit]
-    2. Thought: Staying hydrated while watching TV on sofa, which supports my health-conscious profile. Act: [type: 1, inter_obj_id: 102, inter_obj_name: sofa, inhand_obj_name: water bottle, motion: sit_and_drink]
+    1. Thought: Relaxing and enjoying a TV show, which aligns with my profile of enjoying entertainment, and how it depends on previous predicats. Act: [type: 1, inter_obj_id: 101, inter_obj_name: sofa, inhand_obj_name: remote control, motion: sit]
+    2. Thought: Staying hydrated while watching TV on sofa, which supports my health-conscious profile, and how it depends on previous predicats. Act: [type: 1, inter_obj_id: 102, inter_obj_name: sofa, inhand_obj_name: water bottle, motion: sit_and_drink]
     """
     return contents
 
 
-def propose_predicates(time_, sampled_motion_list, obj_room_mapping, profile_string, output_path, existing_response=None, temperature_dict=None, 
+def propose_predicates(time_, sampled_motion_list, obj_room_mapping, profile_string, retrieved_predicates, output_path, existing_response=None, temperature_dict=None, 
                   model_dict=None, conversation_hist=None):
 
-    predicates_user_contents_filled = propose_predicates_prompt(time_, sampled_motion_list, obj_room_mapping, profile_string)
+    predicates_user_contents_filled = propose_predicates_prompt(time_, sampled_motion_list, obj_room_mapping, profile_string, retrieved_predicates)
 
     if existing_response is None:
         system = "You are a helpful assistant."
