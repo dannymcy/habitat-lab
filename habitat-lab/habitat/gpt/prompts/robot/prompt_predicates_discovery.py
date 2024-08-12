@@ -8,40 +8,37 @@ from habitat.gpt.prompts.utils import *
 from habitat.gpt.query import query
 
 
-def discover_predicates_prompt(time_, intention, obj_room_mapping):
+def discover_predicates_prompt(time_, intention, retrieved_memory, fuzzy_traits, obj_room_mapping):
     contents = f"""
     Input:
     1.  Human activity: {intention} at time: {time_}.
     2.  A dict mapping rigid, static objects to their IDs and rooms: {obj_room_mapping[0]}.
+    3.  Inferred human traits: {fuzzy_traits} (ignore if empty—this means it's your first collaboration with this human).
 
     You are a robot assisting a human.
     Instructions:
     1.  Break down the human activity into 5 predicates.
     2.	Predicate type: Deduce the human's activities and provide objects.
-    3.  Provide small, handable objects from a magical box. Objects in the dict are static thus cannot be used.
-    4. 	All objects are rigid and cannot deform, disassemble, or transform.
+    3.  For each predicate, propose if you should confirm it by specifying a confidence score (0 to 1).
+    4.  Provide small, handable objects from a magical box. Objects in the dict are for room understanding and cannot be used.
+    5. 	All objects are rigid and cannot deform, disassemble, or transform.
+    6.  Use inferred human traits (e.g., an athlete likely does morning exercises), and temporal dependence based on previous activities and predicates as hints.
 
     Write in the following format. Do not output anything else:
     Time: xxx am/pm
     Intention: basic descriptions.
     Predicates: 
-    1. Thought: basic descriptions. Act: [obj_name: xxx]
+    1. Thought: basic descriptions. Confidence: yyy. Reason: reasons of the proposed confidence with respect to human traits and temporal depandence. Act: [obj_name: xxx]
     2. ...
-
-    Examples:
-    Predicates: 
-    1. Thought: Human may apply cream on the face. Act: [obj_name: face_cream]
-    2. Thought: Human may dry hair. Act: [obj_name: hair_dryer]
     """
     return contents
 
 
-def discover_predicates(time_, obj_room_mapping, output_path, existing_response=None, temperature_dict=None, 
+def discover_predicates(time_, retrieved_memory, fuzzy_traits, obj_room_mapping, output_path, existing_response=None, temperature_dict=None, 
                   model_dict=None, conversation_hist=None):
 
     intention = extract_intentions(conversation_hist[0][1])[0]
-    # predicate = extract_predicates(conversation_hist[0][1])[0]
-    predicates_user_contents_filled = discover_predicates_prompt(time_, intention, obj_room_mapping)
+    predicates_user_contents_filled = discover_predicates_prompt(time_, intention, retrieved_memory, fuzzy_traits, obj_room_mapping)
 
     if existing_response is None:
         system = "You are a helpful assistant."

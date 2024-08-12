@@ -12,7 +12,7 @@ def summarize_traits_prompt(profile_string):
     contents = f"""
     Input: Your human profile: {profile_string}.
 
-    Task: Summarize the human traits in a first-person tone, focusing on how these traits impact daily activities, including even minor details.
+    Task: Summarize the human traits in a first-person tone, focusing on how these traits impact daily activities, including even minor details. Do not miss any information.
 
     Write in the following format. Do not output anything else:
     Traits: xxx

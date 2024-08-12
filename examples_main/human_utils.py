@@ -66,12 +66,14 @@ os.chdir(dir_path)
 from habitat.gpt.prompts.human.prompt_traits_summary import summarize_traits
 from habitat.gpt.prompts.human.prompt_intention_proposal import propose_intention
 from habitat.gpt.prompts.human.prompt_predicates_proposal import propose_predicates
-from habitat.gpt.prompts.human.prompt_predicates_reflection import reflect_predicates
-# from habitat.gpt.prompts.human.prompt_motion_planning import plan_motion
+from habitat.gpt.prompts.human.prompt_predicates_reflection_1 import reflect_predicates_1
+from habitat.gpt.prompts.human.prompt_predicates_reflection_2 import reflect_predicates_2
 from habitat.gpt.prompts.human.prompt_collaboration_proposal import propose_collaboration
 from habitat.gpt.prompts.utils import load_response, extract_times, extract_intentions, extract_code
 
 from sentence_transformers import SentenceTransformer
+
+
 
 
 def calculate_recency_scores(times, selected_time, predicates_num, decay_factor=0.95):
@@ -161,17 +163,17 @@ def traits_summary_gpt4(data_path, human_id, scene_id, profile_string, temperatu
     return conversation_hist
 
 
-def intention_proposal_gpt4(data_path, human_id, scene_id, time_tuple, retrieved_intentions, room_list, profile_string, temperature_dict, model_dict, start_over=False):
+def intention_proposal_gpt4(data_path, human_id, scene_id, time_tuple, retrieved_memory, room_list, profile_string, temperature_dict, model_dict, start_over=False):
     output_dir = pathlib.Path(data_path) / "gpt4_response" / "human/intention_proposal" / str(human_id).zfill(5) / scene_id
     os.makedirs(output_dir, exist_ok=True)
     file_idx, time_ = time_tuple
     conversation_hist = []
 
     if start_over:
-        user, res = propose_intention(time_, room_list, profile_string, retrieved_intentions, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=None)
+        user, res = propose_intention(time_, room_list, profile_string, retrieved_memory, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=None)
         time.sleep(20)
     else:
-        user, res = propose_intention(time_, room_list, profile_string, retrieved_intentions, output_dir, existing_response=load_response("intention_proposal", output_dir, file_idx=file_idx), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=None)
+        user, res = propose_intention(time_, room_list, profile_string, retrieved_memory, output_dir, existing_response=load_response("intention_proposal", output_dir, file_idx=file_idx), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=None)
     conversation_hist.append([user, res])
 
     return conversation_hist
@@ -396,46 +398,48 @@ def sample_motion_by_similarity(conversation_hist, motion_list, top_k=5):
     return intention_sentences, sampled_motion_list
 
 
-def predicates_proposal_gpt4(data_path, human_id, scene_id, time_tuple, retrieved_predicates, sampled_motion_list, sampled_static_obj_dict, dynamic_obj_room_mapping, profile_string, conversation_hist, temperature_dict, model_dict, start_over=False):
+def predicates_proposal_gpt4(data_path, human_id, scene_id, time_tuple, retrieved_memory, sampled_motion_list, obj_room_mapping, profile_string, conversation_hist, temperature_dict, model_dict, start_over=False):
     output_dir = pathlib.Path(data_path) / "gpt4_response" / "human/predicates_proposal" / str(human_id).zfill(5) / scene_id
     os.makedirs(output_dir, exist_ok=True)
     file_idx, time_ = time_tuple
     
     if start_over:
-        user, res = propose_predicates(time_, sampled_motion_list, [sampled_static_obj_dict, dynamic_obj_room_mapping], profile_string, retrieved_predicates, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
+        user, res = propose_predicates(time_, sampled_motion_list, obj_room_mapping, profile_string, retrieved_memory, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
         time.sleep(20)
     else:
-        user, res = propose_predicates(time_, sampled_motion_list, [sampled_static_obj_dict, dynamic_obj_room_mapping], profile_string, retrieved_predicates, output_dir, existing_response=load_response("predicates_proposal", output_dir, file_idx=file_idx), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
+        user, res = propose_predicates(time_, sampled_motion_list, obj_room_mapping, profile_string, retrieved_memory, output_dir, existing_response=load_response("predicates_proposal", output_dir, file_idx=file_idx), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
     conversation_hist.append([user, res])
 
     return conversation_hist
 
 
-def predicates_reflection_gpt4(data_path, human_id, scene_id, times, sampled_motion_list, sampled_static_obj_dict_list, dynamic_obj_room_mapping, profile_string, conversation_hist, temperature_dict, model_dict, start_over=False):
-    output_dir = pathlib.Path(data_path) / "gpt4_response" / "human/predicates_reflection" / scene_id / str(human_id).zfill(5)
+def predicates_reflection_1_gpt4(data_path, human_id, scene_id, time_tuple, retrieved_memory, sampled_motion_list, obj_room_mapping, profile_string, conversation_hist, temperature_dict, model_dict, start_over=False):
+    output_dir = pathlib.Path(data_path) / "gpt4_response" / "human/predicates_reflection_1" / str(human_id).zfill(5) / scene_id
     os.makedirs(output_dir, exist_ok=True)
+    file_idx, time_ = time_tuple
 
-    predicates_proposal_path = pathlib.Path(data_path) / "gpt4_response" / "human/predicates_proposal" / scene_id / str(human_id).zfill(5)
-    subdirs = load_response("predicates_proposal", predicates_proposal_path, get_latest=False)
+    if start_over:
+        user, res = reflect_predicates_1(time_, sampled_motion_list, obj_room_mapping, profile_string, retrieved_memory, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
+        time.sleep(20)
+    else:
+        user, res = reflect_predicates_1(time_, sampled_motion_list, obj_room_mapping, profile_string, retrieved_memory, output_dir, existing_response=load_response("predicates_reflection", output_dir, file_idx=file_idx), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
+    conversation_hist.append([user, res])
 
-    for i, time_ in enumerate(times):
-        for subdir in subdirs:
-            if time_ in str(subdir):
-                json_file_path = str(subdir)
-        with open(json_file_path, 'r') as f:
-            json_data = json.load(f)
-            user = json_data["user"]
-            res = json_data["res"]
-        conversation_hist.append([user, res])
+    return conversation_hist
 
-        if start_over:
-            user, res = reflect_predicates(time_, sampled_motion_list, [sampled_static_obj_dict_list[i], dynamic_obj_room_mapping], profile_string, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
-            time.sleep(20)
-        else:
-            user, res = reflect_predicates(time_, sampled_motion_list, [sampled_static_obj_dict_list[i], dynamic_obj_room_mapping], profile_string, output_dir, existing_response=load_response("predicates_reflection", output_dir), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
-        
-        conversation_hist = conversation_hist[:-1]
 
+def predicates_reflection_2_gpt4(data_path, human_id, scene_id, time_tuple, retrieved_memory, sampled_motion_list, obj_room_mapping, profile_string, conversation_hist, temperature_dict, model_dict, start_over=False):
+    output_dir = pathlib.Path(data_path) / "gpt4_response" / "human/predicates_reflection_2" / str(human_id).zfill(5) / scene_id
+    os.makedirs(output_dir, exist_ok=True)
+    file_idx, time_ = time_tuple
+
+    if start_over:
+        user, res = reflect_predicates_2(time_, sampled_motion_list, obj_room_mapping, profile_string, retrieved_memory, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
+        time.sleep(20)
+    else:
+        user, res = reflect_predicates_2(time_, sampled_motion_list, obj_room_mapping, profile_string, retrieved_memory, output_dir, existing_response=load_response("predicates_reflection", output_dir, file_idx=file_idx), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
+    conversation_hist.append([user, res])
+    
     return conversation_hist
 
 

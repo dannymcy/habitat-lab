@@ -169,18 +169,18 @@ def extract_code(prompt_name, prompt_path, file_idx, video_path=None, scene_id=N
         return result_dict
 
 
-# def extract_confidence(text):
-#     """
-#     Extract the confidence from the given text.
-#     """
-#     lines = text.split('\n')
-#     for line in lines:
-#         if line.startswith("Confidence:"):
-#             return line.replace("Confidence:", "").strip()
-#     return None
+def extract_confidence(text):
+    """
+    Extract the confidence from the given text.
+    """
+    lines = text.split('\n')
+    for line in lines:
+        if line.startswith("Confidence:"):
+            return float(line.replace("Confidence:", "").strip())
+    return None
 
 
-def extract_thoughts_and_acts(text):
+def extract_thoughts_and_acts(text, search_txt=" Confidence:"):
     """
     Extract the thoughts and acts from the given text.
     """
@@ -190,9 +190,24 @@ def extract_thoughts_and_acts(text):
 
     for line in lines:
         if "Thought:" in line and "Act:" in line:
-            thought_part = line.split("Thought: ")[1].split(" Act:")[0].strip()
+            thought_part = line.split("Thought: ")[1].split(search_txt)[0].strip()
             act_part = line.split("Act: ")[1].strip()
             thoughts.append(thought_part)
             acts.append(act_part)
 
     return thoughts, acts
+
+
+def extract_confidences(text, search_txt=" Reason:"):
+    """
+    Extract the confidences from the given text.
+    """
+    lines = text.split('\n')
+    confidences = []
+
+    for line in lines:
+        if "Thought:" in line and "Confidence:" in line and "Act:" in line:
+            confidence_part = line.split("Confidence: ")[1].split(search_txt)[0].strip()
+            confidences.append(float(confidence_part.rstrip('.')))
+
+    return confidences

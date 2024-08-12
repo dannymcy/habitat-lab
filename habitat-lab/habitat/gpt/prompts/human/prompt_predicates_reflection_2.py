@@ -8,41 +8,40 @@ from habitat.gpt.prompts.utils import *
 from habitat.gpt.query import query
 
 
-def propose_predicates_prompt(time_, sampled_motion_list, obj_room_mapping, profile_string, retrieved_memory):
+def reflect_predicates_prompt_2(time_, sampled_motion_list, obj_room_mapping, profile_string, retrieved_memory):
     contents = f"""
     Input:
     1.  The proposed activity at time: {time_}.
     2.	A dict mapping rigid, static objects to their IDs and rooms: {obj_room_mapping[0]}.
-    3.  Most relevant human activities proposed at previous times: {retrieved_memory[0]} (ignore if empty—this means it's the first activity of the day).
-    4.  Most relevant human predicates proposed at previous times.ids: {retrieved_memory[1]} (ignore if empty—this means it's the first predicate of the day).
 
-    You are a human living in the house.
+    Your task is to check if the instructions are strictly followed in each predicate, and revise to make better if necessary.
 
     Instructions:
     1.  Break down the activity into 5 predicates for collaboration with a robot.
     2.	Predicate types: 
         - Type 1: Creative, reasonable free-form human motion interacting or approaching a fixed, static object (static objects cannot be moved) with an object in hand provided by the robot (e.g., sit on sofa with TV remote control in hand, wipe table with tissue in hand, squat with dumbbell in hand near rug).
-    3.  For interacting with fixed, static objects, use only objects from the given static object dict. For objects in hand, a robot will provide them.
-    4   Both interacting and inhand objects must be specified (cannot be none).
-    5.  Predicates should be continuous and logical, and align with your profile.
-    6.  Predicates must have temporal dependence with the previous activities and predicates.
-    7.  Free-form motion should be diverse. Examples: {sampled_motion_list}. Feel free to propose others.
-    8. 	All objects are rigid and cannot deform, disassemble, or transform.
+    3.  For interacting with fixed, static objects, use only objects from the given static object dict (exact name). For objects in hand, a robot will provide them.
+    4   Both interacting and inhand objects must be specified. Importantly, they cannot be none.
+    5.  Free-form motion should be diverse. Examples: {sampled_motion_list}. Feel free to propose others.
+    6. 	All objects are rigid and cannot deform, disassemble, or transform.
 
     Write in the following format. Do not output anything else:
     Time: xxx am/pm
     Intention: basic descriptions.
-    Predicates: 
+    Reflect Each Predicates: 
+    1. no mistake or change made.
+    2. ...
+    Revised Predicates: 
     1. Thought: detailed descriptions of the predicate. Reason_human: why it alignes with your profile. Reason_activities: how it depends on previous, relevant activities at [list of time]. Reason_predicates: how it depends on previous, relevant predicates at [list of time.id]. Act: [type: 1, inter_obj_id: real int, inter_obj_name: xxx, inhand_obj_name: yyy, motion: free-form motion]
     2. ...
     """
     return contents
 
 
-def propose_predicates(time_, sampled_motion_list, obj_room_mapping, profile_string, retrieved_memory, output_path, existing_response=None, temperature_dict=None, 
+def reflect_predicates_2(time_, sampled_motion_list, obj_room_mapping, profile_string, retrieved_memory, output_path, existing_response=None, temperature_dict=None, 
                   model_dict=None, conversation_hist=None):
 
-    predicates_user_contents_filled = propose_predicates_prompt(time_, sampled_motion_list, obj_room_mapping, profile_string, retrieved_memory)
+    predicates_user_contents_filled = reflect_predicates_prompt_2(time_, sampled_motion_list, obj_room_mapping, profile_string, retrieved_memory)
 
     if existing_response is None:
         system = "You are a helpful assistant."
@@ -50,13 +49,13 @@ def propose_predicates(time_, sampled_motion_list, obj_room_mapping, profile_str
         time_string = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d-%H-%M-%S')
         save_folder = output_path / (time_string + "_" + time_)
         save_folder.mkdir(parents=True, exist_ok=True)
-        save_path = str(save_folder) + "/predicates_proposal.json"
+        save_path = str(save_folder) + "/predicates_reflection.json"
 
         print("=" * 50)
-        print("=" * 20, "Proposing Predicates", "=" * 20)
+        print("=" * 20, "Reflecting Predicates Mistakes", "=" * 20)
         print("=" * 50)
         
-        json_data = query(system, [("", []), (predicates_user_contents_filled, [])], [(conversation_hist[0][1], [])], save_path, model_dict['predicates_proposal'], temperature_dict['predicates_proposal'], debug=False)
+        json_data = query(system, [("", []), ("", []), ("", []), (predicates_user_contents_filled, [])], [("", []), ("", []), (conversation_hist[2][1], [])], save_path, model_dict['predicates_reflection'], temperature_dict['predicates_reflection'], debug=False)
    
     else:
         with open(existing_response, 'r') as f:

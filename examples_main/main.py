@@ -56,6 +56,7 @@ from sentence_transformers import SentenceTransformer
 from habitat.gpt.prompts.utils import *
 from human_utils import *
 from robot_utils import *
+from judge_utils import *
 
 
 @registry.register_task_action
@@ -635,7 +636,7 @@ def customized_humanoid_motion(env, convert_helper, folder_dict, motion_pkl_path
         observations.append(env.step(action_dict))
 
 
-def execute_humanoid_1(env, human_id, time_, extracted_planning, motion_sets_list, obj_room_mapping, obj_trans_dict, room_dict):
+def execute_humanoid_1(env, human_id, scene_id, time_, extracted_planning, motion_sets_list, obj_room_mapping, obj_trans_dict, room_dict):
     # TODO: Using sudo dmesg -T, the process is sometimes killed because OOM Killer. 
     # The reason is likely to be for some free-form motion, the robot planned path towards an object is never found / the robot is in collision with the scene, and increases computation overhead.
     # When rendering the videos, it causes OOM Killer.
@@ -680,7 +681,7 @@ def execute_humanoid_1(env, human_id, time_, extracted_planning, motion_sets_lis
         
         ts = time.time()
         time_string = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d-%H-%M-%S')
-        video_dir = os.path.join(output_dir, f"human/{human_id}/{time_string}_{time_}")
+        video_dir = os.path.join(output_dir, f"human/{str(human_id).zfill(5)}/{scene_id}/{time_string}_{time_}")
         os.makedirs(video_dir, exist_ok=True)
         with open(os.path.join(video_dir, f"{selected_motion}.txt"), 'w') as file: file.write(selected_motion)
 
@@ -835,21 +836,23 @@ if __name__ == "__main__":
     # Communicating to ChatGPT-4 API
     temperature_dict = {
         "traits_summary": 0.25,
-        "intention_proposal": 0.9,
-        "predicates_proposal": 0.9,
+        "intention_proposal": 0.7,
+        "predicates_proposal": 0.7,
         "predicates_reflection": 0.25,
-        "intention_discovery": 0.9,
-        "predicates_discovery": 0.9,
+        "intention_discovery": 0.7,
+        "predicates_discovery": 0.7,
+        "traits_inference": 0.25,
         "collaboration_proposal": 0.7
     }
     # GPT-4 1106-preview is GPT-4 Turbo (https://openai.com/pricing)
     model_dict = {
-        "traits_summary": "gpt-4o-mini",
+        "traits_summary": "gpt-4o",
         "intention_proposal": "gpt-4o-mini",
         "predicates_proposal": "gpt-4o-mini",
-        "predicates_reflection": "gpt-4o-mini",
+        "predicates_reflection": "gpt-4o",
         "intention_discovery": "gpt-4o-mini",
         "predicates_discovery": "gpt-4o-mini",
+        "traits_inference": "gpt-4o-mini",
         "collaboration_proposal": "gpt-4o-mini"
     }
 
@@ -860,58 +863,88 @@ if __name__ == "__main__":
              '5 pm', '6 pm', '7 pm', '8 pm', '9 pm'
     ]
     predicates_num = 5
+    confidence_threshold = 0.5
     
     for i, (profile_string_complete, profile_string_partial) in enumerate(zip(profile_string_complete_list, profile_string_partial_list)):
         if i != 0: continue
-        intentions_hist, predicates_hist = [], []
+        human_intentions_hist, human_predicates_hist = [], []
+        profile_string = traits_summary_gpt4(data_path, i, scene_id, profile_string_complete, temperature_dict, model_dict, start_over=False)[0][1]
 
-        human_traits = traits_summary_gpt4(data_path, i, scene_id, profile_string_complete, temperature_dict, model_dict, start_over=False)
-        profile_string = human_traits[0][1]
+        robot_intentions_hist, robot_predicates_hist = [], []
+        inferred_traits = ""
 
         for j, time_ in enumerate(times):
             # if j != 0: continue
-            retrieved_intentions = retrieve_memory(f"Current time: {time_}", intentions_hist, times, time_, predicates_num, decay_factor=0.95, top_k=10, retrieve_type="intention")
+            # human_retrieved_intentions = retrieve_memory(f"Current time: {time_}", human_intentions_hist, times, time_, predicates_num, decay_factor=0.95, top_k=13, retrieve_type="intention")
+            human_retrieved_intentions = human_intentions_hist
+            human_retrieved_predicates = retrieve_memory(f"Current time: {time_}", human_predicates_hist, times, time_, predicates_num, decay_factor=0.95, top_k=5, retrieve_type="predicate")
 
-            human_conversation_hist = intention_proposal_gpt4(data_path, i, scene_id, [j, time_], retrieved_intentions, room_list, profile_string_complete, temperature_dict, model_dict, start_over=True)
-            _, intention_sentence_list, sampled_static_obj_dict_list = sample_obj_by_similarity(human_conversation_hist, static_obj_room_mapping, top_k=30)
+            human_conversation_hist = intention_proposal_gpt4(data_path, i, scene_id, [j, time_], [human_retrieved_intentions, human_retrieved_predicates], room_list, profile_string, temperature_dict, model_dict, start_over=False)
+            _, gt_intention_sentence_list, sampled_static_obj_dict_list = sample_obj_by_similarity(human_conversation_hist, static_obj_room_mapping, top_k=30)
             _, sampled_motion_list = sample_motion_by_similarity(human_conversation_hist, motion_sets_list, top_k=5)
-            intention_sentence, sampled_static_obj_dict, sampled_motion_list = intention_sentence_list[0], sampled_static_obj_dict_list[0], sampled_motion_list[0]
-            intentions_hist.append(intention_sentence)
+            gt_intention_sentence, sampled_static_obj_dict, sampled_motion_list = gt_intention_sentence_list[0], sampled_static_obj_dict_list[0], sampled_motion_list[0]
+            human_intentions_hist.append(f"{time_}: {gt_intention_sentence}")
 
-            retrieved_predicates = retrieve_memory(f"Current time: {time_}. Intention: {intention_sentence}", predicates_hist, times, time_, predicates_num, decay_factor=0.95, top_k=5, retrieve_type="predicate")
+            human_retrieved_predicates = retrieve_memory(f"Current time: {time_}. Intention: {gt_intention_sentence}", human_predicates_hist, times, time_, predicates_num, decay_factor=0.95, top_k=5, retrieve_type="predicate")
 
-            human_conversation_hist = predicates_proposal_gpt4(data_path, i, scene_id, [j, time_], retrieved_predicates, sampled_motion_list, sampled_static_obj_dict, dynamic_obj_room_mapping, profile_string, human_conversation_hist, temperature_dict, model_dict, start_over=True)
-            human_thought, human_act = extract_thoughts_and_acts(human_conversation_hist[1][1])
-            predicates_hist.extend(human_thought)
+            human_conversation_hist = predicates_proposal_gpt4(data_path, i, scene_id, [j, time_], [human_retrieved_intentions, human_retrieved_predicates], sampled_motion_list, [sampled_static_obj_dict, dynamic_obj_room_mapping], profile_string, human_conversation_hist, temperature_dict, model_dict, start_over=False)
+            human_conversation_hist = predicates_reflection_1_gpt4(data_path, i, scene_id, [j, time_], [human_retrieved_intentions, human_retrieved_predicates], sampled_motion_list, [sampled_static_obj_dict_list, dynamic_obj_room_mapping], profile_string, human_conversation_hist, temperature_dict, model_dict, start_over=False)
+            human_conversation_hist = predicates_reflection_2_gpt4(data_path, i, scene_id, [j, time_], [human_retrieved_intentions, human_retrieved_predicates], sampled_motion_list, [sampled_static_obj_dict_list, dynamic_obj_room_mapping], profile_string, human_conversation_hist, temperature_dict, model_dict, start_over=False)
 
-        # human_conversation_hist = predicates_proposal_gpt4(data_path, i, scene_id, times, sampled_motion_list, sampled_static_obj_dict_list, dynamic_obj_room_mapping, profile_string_partial, human_conversation_hist, temperature_dict, model_dict, start_over=False)
-        # human_conversation_hist = predicates_reflection_gpt4(data_path, i, scene_id, times, sampled_motion_list, sampled_static_obj_dict_list, dynamic_obj_room_mapping, profile_string_partial, human_conversation_hist, temperature_dict, model_dict, start_over=False)
+            human_thoughts, human_acts = extract_thoughts_and_acts(human_conversation_hist[-1][1], search_txt=" Reason_human:")
+            human_predicates_hist.extend([f"{time_}.{k}: {human_thought}" for k, human_thought in enumerate(human_thoughts)])
 
-        # for j, time_ in enumerate(times):
-        #     if time_ != "2 pm": continue
-        #     # query the observation of each of the agents
-        #     # without this will cause: AssertionError: Episode over, call reset before calling step
-        #     observations = env.reset()
-        #     _, ax = plt.subplots(1, len(observations.keys()))
-        #     for ind, name in enumerate(observations.keys()):
-        #         ax[ind].imshow(observations[name])
-        #         ax[ind].set_axis_off()
-        #         ax[ind].set_title(name)
+            # =====================================================================================================================
+            # query the observation of each of the agents
+            # without this will cause: AssertionError: Episode over, call reset before calling step
+            observations = env.reset()
+            _, ax = plt.subplots(1, len(observations.keys()))
+            for ind, name in enumerate(observations.keys()):
+                ax[ind].imshow(observations[name])
+                ax[ind].set_axis_off()
+                ax[ind].set_title(name)
 
-                
-        #     env.reset()
-        #     observations = []
+            env.reset()
+            observations = []
 
-        #     extracted_planning = extract_code("predicates_reflection", pathlib.Path(data_path) / "gpt4_response" / "human/predicates_reflection" / scene_id / str(i).zfill(5), j)
-        #     execute_humanoid_1(env, str(i).zfill(5), time_, extracted_planning, motion_sets_list, [static_obj_room_mapping, dynamic_obj_room_mapping], [static_obj_trans_dict, dynamic_obj_trans_dict], room_dict)
+            extracted_planning = extract_code("predicates_reflection", pathlib.Path(data_path) / "gpt4_response" / "human/predicates_reflection_2" / str(i).zfill(5) / scene_id, j)
+            
+            # if j == 0:
+            #     execute_humanoid_1(env, i, scene_id, time_, extracted_planning, motion_sets_list, [static_obj_room_mapping, dynamic_obj_room_mapping], [static_obj_trans_dict, dynamic_obj_trans_dict], room_dict)
 
-        #     video_dir_search_pattern = os.path.join(output_dir, f"human/{str(i).zfill(5)}/*_{time_}")
-        #     video_dir = glob.glob(video_dir_search_pattern)[0]
-        #     robot_conversation_hist = intention_discovery_gpt4(data_path, i, scene_id, [j, time_], [os.path.join(video_dir, "robot_scene_camera_rgb_video"), os.path.join(video_dir, "human_third_rgb_video")], temperature_dict, model_dict, start_over=False)
-        #     _, _, sampled_static_obj_dict = sample_obj_by_similarity(robot_conversation_hist, static_obj_room_mapping, top_k=30)
-   
-        #     robot_conversation_hist = predicates_discovery_gpt4(data_path, i, scene_id, [j, time_], sampled_static_obj_dict, dynamic_obj_room_mapping, robot_conversation_hist, temperature_dict, model_dict, start_over=False)
-        #     robot_thought, robot_act = extract_thoughts_and_acts(robot_conversation_hist[1][1])
+
+            # =====================================================================================================================
+            video_dir_search_pattern = os.path.join(output_dir, f"human/{str(i).zfill(5)}/{scene_id}/*_{time_}")
+            video_dir = glob.glob(video_dir_search_pattern)[0]
+    
+            robot_retrieved_intentions = robot_intentions_hist
+            robot_retrieved_predicates = retrieve_memory(f"Current time: {time_}", robot_predicates_hist, times, time_, predicates_num, decay_factor=0.95, top_k=5, retrieve_type="predicate")
+
+            robot_conversation_hist = intention_discovery_gpt4(data_path, i, scene_id, [j, time_], [os.path.join(video_dir, "robot_scene_camera_rgb_video"), os.path.join(video_dir, "human_third_rgb_video")], [robot_retrieved_intentions, robot_retrieved_predicates], inferred_traits, temperature_dict, model_dict, start_over=True)
+            _, ps_intention_sentence_list, sampled_static_obj_dict_list = sample_obj_by_similarity(robot_conversation_hist, static_obj_room_mapping, top_k=30)
+            ps_intention_sentence, sampled_static_obj_dict = ps_intention_sentence_list[0], sampled_static_obj_dict_list[0]
+            confidence_intention = extract_confidence(robot_conversation_hist[0][1])
+
+            if confidence_intention > confidence_threshold:
+                selected_intention_sentence = ps_intention_sentence
+            else:
+                selected_intention_sentence = gt_intention_sentence
+            robot_intentions_hist.append(f"{time_}: {selected_intention_sentence}")
+            
+            robot_retrieved_predicates = retrieve_memory(f"Current time: {time_}. Intention: {selected_intention_sentence}", robot_predicates_hist, times, time_, predicates_num, decay_factor=0.95, top_k=5, retrieve_type="predicate")
+
+            robot_conversation_hist = predicates_discovery_gpt4(data_path, i, scene_id, [j, time_], [sampled_static_obj_dict, dynamic_obj_room_mapping], [robot_retrieved_intentions, robot_retrieved_predicates], inferred_traits, robot_conversation_hist, temperature_dict, model_dict, start_over=True)
+            robot_thoughts, robot_acts = extract_thoughts_and_acts(robot_conversation_hist[-1][1])
+            confidence_predicates = extract_confidences(robot_conversation_hist[-1][1])
+
+            for k, (robot_thought, confidence_predicate, human_thought) in enumerate(zip(robot_thoughts, confidence_predicates, human_thoughts)):
+                if confidence_predicate > 0.85:
+                    robot_predicates_hist.append(f"{time_}.{k}: {robot_thought}")
+                else:
+                    robot_predicates_hist.append(f"{time_}.{k}: {human_thought}")
+
+
+            inferred_traits = traits_inference_gpt4(data_path, i, scene_id, [robot_intentions_hist, robot_predicates_hist], inferred_traits, temperature_dict, model_dict, start_over=True)[0][1]
 
         #     print()
         #     print(time_)

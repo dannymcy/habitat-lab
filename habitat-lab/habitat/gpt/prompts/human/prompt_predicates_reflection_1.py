@@ -8,41 +8,38 @@ from habitat.gpt.prompts.utils import *
 from habitat.gpt.query import query
 
 
-def reflect_predicates_prompt(time_, sampled_motion_list, obj_room_mapping, profile_string):
+def reflect_predicates_prompt_1(time_, sampled_motion_list, obj_room_mapping, profile_string, retrieved_memory):
     contents = f"""
     Input:
     1.  The proposed activity at time: {time_}.
     2.	A dict mapping rigid, static objects to their IDs and rooms: {obj_room_mapping[0]}.
+    3.  Most relevant human activities proposed at previous times: {retrieved_memory[0]} (if empty, ignore it—this means it's the first activity of the day).
+    4.  Most relevant human predicates proposed at previous times.ids: {retrieved_memory[1]} (if empty, ignore it—this means it's the first activity of the day).
 
-    Your task is to check if the instructions are strictly followed in each predicate, and revise to make better if necessary.
+    Your task is to check if the temporal dependence and human profile are strictly followed in each predicate, and revise to make better if necessary.
 
     Instructions:
-    1.  Break down the activity into 5 predicates for collaboration with a robot.
-    2.	Predicate types: 
-        - Type 1: Creative, reasonable free-form human motion interacting or approaching a fixed, static object (static objects cannot be moved) with an object in hand provided by the robot (e.g., sit on sofa with TV remote control in hand, wipe table with tissue in hand, squat with dumbbell in hand near rug).
+    1.  Predicates should be continuous and logical, and align with your profile.
+    2.  Predicates must have temporal dependence with the previous activities and predicates, with detailed explanation mentioning previous activities and predicates explicitly.
     3.  For interacting with fixed, static objects, use only objects from the given static object dict. For objects in hand, a robot will provide them.
-    4   Both interacting and inhand objects must be specified.
-    5.  Predicates should be continuous and logical, and align with your profile.
-    6.  Free-form motion should be diverse. Examples: {sampled_motion_list}. Feel free to propose others.
-    7. 	All objects are rigid and cannot deform, disassemble, or transform.
 
     Write in the following format. Do not output anything else:
     Time: xxx am/pm
     Intention: basic descriptions.
-    Reflect Predicates: 
-    1. no mistake or the mistake found.
+    Reflect Each Predicate: 
+    1. no mistake or change made.
     2. ...
     Revised Predicates: 
-    1. Thought: detailed descriptions and why it alignes with your profile. Act: [type: 1, inter_obj_id: real int, inter_obj_name: xxx, inhand_obj_name: yyy, motion: free-form motion/pick/place]
+    1. Thought: detailed descriptions of the predicate. Reason_human: why it alignes with your profile. Reason_activities: how it depends on previous, relevant activities at [list of time]. Reason_predicates: how it depends on previous, relevant predicates at [list of time.id]. Act: [type: 1, inter_obj_id: real int, inter_obj_name: xxx, inhand_obj_name: yyy, motion: free-form motion]
     2. ...
     """
     return contents
 
 
-def reflect_predicates(time_, sampled_motion_list, obj_room_mapping, profile_string, output_path, existing_response=None, temperature_dict=None, 
+def reflect_predicates_1(time_, sampled_motion_list, obj_room_mapping, profile_string, retrieved_memory, output_path, existing_response=None, temperature_dict=None, 
                   model_dict=None, conversation_hist=None):
 
-    predicates_user_contents_filled = reflect_predicates_prompt(time_, sampled_motion_list, obj_room_mapping, profile_string)
+    predicates_user_contents_filled = reflect_predicates_prompt_1(time_, sampled_motion_list, obj_room_mapping, profile_string, retrieved_memory)
 
     if existing_response is None:
         system = "You are a helpful assistant."
@@ -53,7 +50,7 @@ def reflect_predicates(time_, sampled_motion_list, obj_room_mapping, profile_str
         save_path = str(save_folder) + "/predicates_reflection.json"
 
         print("=" * 50)
-        print("=" * 20, "Reflecting Predicates", "=" * 20)
+        print("=" * 20, "Reflecting Predicates Dependence", "=" * 20)
         print("=" * 50)
         
         json_data = query(system, [("", []), ("", []), (predicates_user_contents_filled, [])], [("", []), (conversation_hist[1][1], [])], save_path, model_dict['predicates_reflection'], temperature_dict['predicates_reflection'], debug=False)
