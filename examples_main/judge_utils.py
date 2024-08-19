@@ -40,6 +40,7 @@ import random
 import torch
 import pathlib
 import time
+from collections import Counter
 
 import cv2
 from torchvision.transforms import Compose, Lambda
@@ -71,17 +72,40 @@ from sentence_transformers import SentenceTransformer
 
 
 
-def calculate_ocean_mse(ocean1, ocean2):
+def calculate_ocean_mse(ocean1, ocean2_list):
     """
-    Calculate the Mean Squared Error (MSE) between two OCEAN matrices.
+    Calculate the Mean Squared Error (MSE) between a ground truth OCEAN matrix and a list of OCEAN matrices.
 
-    :param ocean1: Dictionary with OCEAN traits as keys and their corresponding scores as values.
-    :param ocean2: Dictionary with OCEAN traits as keys and their corresponding scores as values.
-    :return: The Mean Squared Error (MSE) between the two OCEAN matrices.
+    :param ocean1: Dictionary with OCEAN traits as keys and their corresponding scores as values (ground truth).
+    :param ocean2_list: List of dictionaries where each dictionary has OCEAN traits as keys and their corresponding scores as values.
+    :return: The Mean Squared Error (MSE) between the ground truth OCEAN matrix and the majority-voted OCEAN matrix.
     """
+    def round_to_nearest_half(value):
+        """
+        Round a value to the nearest 0.5 increment.
+        """
+        return round(value * 2) / 2
+        
+    # Initialize the majority-voted OCEAN dictionary
+    majority_voted_ocean = {}
+
+    # If there is only one dictionary in the ocean2_list, take that as the majority voted result
+    if len(ocean2_list) == 1:
+        ocean2_list = [{k: round_to_nearest_half(v) for k, v in ocean2_list[0].items()}]
+
+    # Iterate over each trait in the OCEAN model
+    for trait in ocean1:
+        # Get all the rounded values for this trait from each dictionary in ocean2_list
+        rounded_values = [round_to_nearest_half(ocean[trait]) for ocean in ocean2_list]
+        
+        # Take the majority vote for this trait
+        majority_vote = Counter(rounded_values).most_common(1)[0][0]
+        majority_voted_ocean[trait] = majority_vote
+
+    # Calculate MSE between ocean1 and the majority-voted ocean
     mse = 0.0
     for trait in ocean1:
-        mse += (ocean1[trait] - ocean2[trait]) ** 2
+        mse += (ocean1[trait] - majority_voted_ocean[trait]) ** 2
     
     mse /= len(ocean1)
     
@@ -95,10 +119,10 @@ def traits_inference_gpt4(data_path, human_id, scene_id, time_tuple, retrieved_m
     file_idx, time_ = time_tuple
 
     if start_over:
-        user, res = infer_traits(retrieved_memory, fuzzy_traits, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=None)
+        user, res = infer_traits(time_, retrieved_memory, fuzzy_traits, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=None)
         time.sleep(20)
     else:
-        user, res = infer_traits(retrieved_memory, fuzzy_traits, output_dir, existing_response=load_response("traits_inference", output_dir, file_idx=file_idx), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=None)
+        user, res = infer_traits(time_, retrieved_memory, fuzzy_traits, output_dir, existing_response=load_response("traits_inference", output_dir, file_idx=file_idx), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=None)
     conversation_hist.append([user, res])
 
     return conversation_hist

@@ -11,11 +11,10 @@ from habitat.gpt.query import query
 def infer_traits_prompt(retrieved_memory, fuzzy_traits):
     contents = f"""
     Input:
-    1.  Previously inferred Big Five personality scores: {fuzzy_traits} (ignore if empty—this means it's your first inference).
-    2.  Human intentions at previous times: {retrieved_memory[0]} (ignore if empty—this means it's your first inference).
-    3.  Human tasks at previous times.ids: {retrieved_memory[1]} (ignore if empty—this means it's your first inference).
+    1.  Human intentions at previous times: {retrieved_memory[0]} (ignore if empty—this means it's your first inference).
+    2.  Human tasks at previous times.ids: {retrieved_memory[1]} (ignore if empty—this means it's your first inference).
 
-    Task: Infer Big Five personality traits (scale 0-5, float) based on provided intentions and tasks. Revise previously inferred scores if needed.
+    Task: Infer Big Five personality traits (scale 0-5, float) based on provided intentions and tasks.
 
     Write in the following format. Do not output anything else:
     Scores: {{'openness': a, 'conscientiousness': b, 'extroversion': c, 'agreeableness': d, 'neuroticism': e}}
@@ -24,7 +23,7 @@ def infer_traits_prompt(retrieved_memory, fuzzy_traits):
     return contents
 
 
-def infer_traits(retrieved_memory, fuzzy_traits, output_path, existing_response=None, temperature_dict=None, 
+def infer_traits(time_, retrieved_memory, fuzzy_traits, output_path, existing_response=None, temperature_dict=None, 
                   model_dict=None, conversation_hist=None):
 
     traits_user_contents_filled = infer_traits_prompt(retrieved_memory, fuzzy_traits)
@@ -33,7 +32,7 @@ def infer_traits(retrieved_memory, fuzzy_traits, output_path, existing_response=
         system = "You are a helpful assistant."
         ts = time.time()
         time_string = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d-%H-%M-%S')
-        save_folder = output_path / time_string
+        save_folder = output_path / (time_string + "_" + time_)
         save_folder.mkdir(parents=True, exist_ok=True)
         save_path = str(save_folder) + "/traits_inference.json"
 

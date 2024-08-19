@@ -812,6 +812,7 @@ if __name__ == "__main__":
 
         robot_intentions_hist, robot_predicates_hist = [], []
         inferred_traits = ""
+        inferred_traits_hist = []
 
         vis_dir = pathlib.Path(data_path) / "gpt4_response" / "vis" / str(i).zfill(5) / scene_id
         vis_csv_path = vis_dir / "vis.xlsx"
@@ -892,8 +893,9 @@ if __name__ == "__main__":
 
             inferred_traits = traits_inference_gpt4(data_path, i, scene_id, [j, time_], [robot_intentions_hist, robot_predicates_hist], inferred_traits, temperature_dict, model_dict, start_over=False)[0][1]
             inferred_traits = extract_scores(inferred_traits)
+            inferred_traits_hist.append(inferred_traits)
 
-            big_five_mse = calculate_ocean_mse(big_five, inferred_traits)
+            big_five_mse = calculate_ocean_mse(big_five, inferred_traits_hist)
 
             for k in range(predicates_num):
                 if k == 0:
