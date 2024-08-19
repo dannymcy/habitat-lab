@@ -14,23 +14,23 @@ def discover_intention_prompt(time_, fuzzy_traits, retrieved_memory):
     Input:
     1.	Sequence of images showing human motion from your and human's perspectives.
     2.  Current time: {time_}.
-    3.  Inferred human traits: {fuzzy_traits} (ignore if empty—this means it's your first collaboration with this human).
-    4.  Most relevant human activities discovered at previous times: {retrieved_memory[0]} (ignore if empty—this means it's the first activity of the day).
-    5.  Most relevant human predicates discovered at previous times.ids: {retrieved_memory[1]} (ignore if empty—this means it's the first predicate of the day).
+    3.  Inferred Big Five personality scores: {fuzzy_traits} (ignore if empty—this means it's your first collaboration with this human).
+    4.  Most relevant human intentions discovered at previous times: {retrieved_memory[0]} (ignore if empty—this means it's the first intention of the day).
+    5.  Most relevant human tasks discovered at previous times.ids: {retrieved_memory[1]} (ignore if empty—this means it's the first task of the day).
 
     You are a robot assisting a human. Identify the human's intention and propose if you should confirm it by specifying a confidence score.
 
     Instructions:
     1.	Intention must be high-level and human-centric (e.g., hygiene, sport, leisure) or room-centric (e.g., clean, organize, set-up). Do not mention specific objects.
     2.  Map the observed human motion to a higher-level intention without mentioning the specific motion.
-    3. 	Use the time of day (e.g., at 12 pm, it is likely lunch time), inferred human traits (e.g., an athlete likely does morning exercises), and temporal dependence based on previous activities and predicates as hints.
+    3. 	Use the time of day (e.g., at 12 pm, it is likely lunch time), inferred Big 5 scores, and temporal dependence based on previous intentions and tasks as hints.
     4.  Confidence score should between 0 and 1.
 
     Write in the following format. Do not output anything else:
     Time: xxx am/pm
     Intention: basic descriptions (e.g., Prepare for bed and unwind in the bedroom).
     Confidence: yyy
-    Reason_text: detailed descriptions of why it follows the inferred human traits, has temporal dependence with the previous, relevant activities at [list of time] or predicates at [list of time.id].
+    Reason_text: detailed descriptions of why it follows the inferred Big 5 scores, has temporal dependence with the previous, relevant intentions at [list of time] or tasks at [list of time.id].
     Reason_vis: detailed descriptions with respect to the visual cues.
     """
     return contents

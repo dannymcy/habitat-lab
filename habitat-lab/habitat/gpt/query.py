@@ -5,7 +5,6 @@ import json
 
 # key name: dynamic_HRC
 
-
 def query(system, user_contents, assistant_contents, save_path=None, model='gpt-4', temperature=1, debug=False):
     for user_content, assistant_content in zip(user_contents, assistant_contents):
         user_content = user_content[0].split("\n")

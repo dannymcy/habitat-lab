@@ -71,16 +71,34 @@ from sentence_transformers import SentenceTransformer
 
 
 
-def traits_inference_gpt4(data_path, human_id, scene_id, retrieved_memory, fuzzy_traits, temperature_dict, model_dict, start_over=False):
+def calculate_ocean_mse(ocean1, ocean2):
+    """
+    Calculate the Mean Squared Error (MSE) between two OCEAN matrices.
+
+    :param ocean1: Dictionary with OCEAN traits as keys and their corresponding scores as values.
+    :param ocean2: Dictionary with OCEAN traits as keys and their corresponding scores as values.
+    :return: The Mean Squared Error (MSE) between the two OCEAN matrices.
+    """
+    mse = 0.0
+    for trait in ocean1:
+        mse += (ocean1[trait] - ocean2[trait]) ** 2
+    
+    mse /= len(ocean1)
+    
+    return mse
+
+
+def traits_inference_gpt4(data_path, human_id, scene_id, time_tuple, retrieved_memory, fuzzy_traits, temperature_dict, model_dict, start_over=False):
     output_dir = pathlib.Path(data_path) / "gpt4_response" / "judge/traits_inference" / str(human_id).zfill(5) / scene_id
     os.makedirs(output_dir, exist_ok=True)
     conversation_hist = []
+    file_idx, time_ = time_tuple
 
     if start_over:
         user, res = infer_traits(retrieved_memory, fuzzy_traits, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=None)
         time.sleep(20)
     else:
-        user, res = infer_traits(retrieved_memory, fuzzy_traits, output_dir, existing_response=load_response("traits_inference", output_dir), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=None)
+        user, res = infer_traits(retrieved_memory, fuzzy_traits, output_dir, existing_response=load_response("traits_inference", output_dir, file_idx=file_idx), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=None)
     conversation_hist.append([user, res])
 
     return conversation_hist

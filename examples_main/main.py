@@ -39,6 +39,8 @@ from habitat.datasets.rearrange.rearrange_dataset import RearrangeEpisode
 import gzip
 import json
 import pandas as pd
+from openpyxl.utils import get_column_letter
+import csv
 import copy
 import random
 import torch
@@ -664,6 +666,9 @@ def execute_humanoid_1(env, human_id, scene_id, time_, extracted_planning, motio
                 object_bb = bb
                 break
         
+        if object_trans is None:  # the object is not found in the dict, because of mistake made by VLM
+            _, (_, object_trans, object_bb) = most_similar_object(step[2], obj_trans_dict_to_search)
+        
         walk_to(env, i, humanoid_rearrange_controller, object_trans, object_bb, obj_trans_dict_to_search, room_dict)
         
         if step[0] == 1:
@@ -693,70 +698,6 @@ def execute_humanoid_1(env, human_id, scene_id, time_, extracted_planning, motio
         extract_frames(os.path.join(video_dir, f"robot_scene_camera_rgb_video.mp4"), os.path.join(video_dir, f"robot_scene_camera_rgb_video"))
         extract_frames(os.path.join(video_dir, f"human_third_rgb_video.mp4"), os.path.join(video_dir, f"human_third_rgb_video"))
         # del observations[initial_observations_length:]
-
-
-def read_human_data():
-    csv_file_path = os.path.join(data_path, "humanoids/humanoid_data/okcupid_profiles.csv")
-    okcupid_data = pd.read_csv(csv_file_path)
-    profiles = okcupid_data[['age', 'sex', 'orientation', 'body_type', 'diet', 'drinks', 'education', 'ethnicity', 'height', 'job', 'location', 'offspring', 'pets', 'religion', 'smokes', 'essay0', 'essay1', 'essay2', 'essay3', 'essay4', 'essay5', 'essay6','essay7', 'essay8', 'essay9']]
-
-    profile_string_complete_list = []
-    profile_string_partial_list = []
-
-    for i in range(min(100, len(profiles))):
-        selected_profile = profiles.iloc[i]
-
-        # Create a one-paragraph string
-        profile_string_complete = (
-            f"Age: {selected_profile['age']}; "
-            f"Sex: {selected_profile['sex']}; "
-            f"Orientation: {selected_profile['orientation']}; "
-            f"Body Type: {selected_profile['body_type']}; "
-            f"Diet: {selected_profile['diet']}; "
-            f"Drinks: {selected_profile['drinks']}; "
-            f"Education: {selected_profile['education']}; "
-            f"Ethnicity: {selected_profile['ethnicity']}; "
-            f"Height: {selected_profile['height']}; "
-            f"Job: {selected_profile['job']}; "
-            f"Location: {selected_profile['location']}; "
-            f"Offspring: {selected_profile['offspring']}; "
-            f"Pets: {selected_profile['pets']}; "
-            f"Religion: {selected_profile['religion']}; "
-            f"Smokes: {selected_profile['smokes']}; "
-            f"Intro 1: {selected_profile['essay0']}; "
-            f"Intro 2: {selected_profile['essay1']}; "
-            f"Intro 3: {selected_profile['essay2']}; "
-            f"Intro 4: {selected_profile['essay3']}; "
-            f"Intro 5: {selected_profile['essay4']}; "
-            f"Intro 6: {selected_profile['essay5']}; "
-            f"Intro 7: {selected_profile['essay6']}; "
-            f"Intro 8: {selected_profile['essay7']}; "
-            f"Intro 9: {selected_profile['essay8']}; "    
-            f"Intro 10: {selected_profile['essay9']}"  
-        )
-
-        profile_string_partial = (
-            f"Age: {selected_profile['age']}; "
-            f"Sex: {selected_profile['sex']}; "
-            f"Orientation: {selected_profile['orientation']}; "
-            f"Body Type: {selected_profile['body_type']}; "
-            f"Diet: {selected_profile['diet']}; "
-            f"Drinks: {selected_profile['drinks']}; "
-            f"Education: {selected_profile['education']}; "
-            f"Ethnicity: {selected_profile['ethnicity']}; "
-            f"Height: {selected_profile['height']}; "
-            f"Job: {selected_profile['job']}; "
-            f"Location: {selected_profile['location']}; "
-            f"Offspring: {selected_profile['offspring']}; "
-            f"Pets: {selected_profile['pets']}; "
-            f"Religion: {selected_profile['religion']}; "
-            f"Smokes: {selected_profile['smokes']}."
-        )
-
-        profile_string_complete_list.append(profile_string_complete)
-        profile_string_partial_list.append(profile_string_partial)
-
-    return profile_string_complete_list, profile_string_partial_list
 
 
 
@@ -847,39 +788,43 @@ if __name__ == "__main__":
     # GPT-4 1106-preview is GPT-4 Turbo (https://openai.com/pricing)
     model_dict = {
         "traits_summary": "gpt-4o",
-        "intention_proposal": "gpt-4o-mini",
-        "predicates_proposal": "gpt-4o-mini",
+        "intention_proposal": "gpt-4o",
+        "predicates_proposal": "gpt-4o",
         "predicates_reflection": "gpt-4o",
         "intention_discovery": "gpt-4o-mini",
         "predicates_discovery": "gpt-4o-mini",
-        "traits_inference": "gpt-4o-mini",
+        "traits_inference": "gpt-4o",
         "collaboration_proposal": "gpt-4o-mini"
     }
 
 
-    profile_string_complete_list, profile_string_partial_list = read_human_data()
+    profile_string_list, big_five_list = read_human_data_mypersonality(data_path)
     times = ['9 am', '10 am', '11 am', '12 pm', 
              '1 pm', '2 pm', '3 pm', '4 pm', 
              '5 pm', '6 pm', '7 pm', '8 pm', '9 pm'
     ]
     predicates_num = 5
-    confidence_threshold = 0.5
-    
-    for i, (profile_string_complete, profile_string_partial) in enumerate(zip(profile_string_complete_list, profile_string_partial_list)):
-        if i != 0: continue
+
+    for i, (profile_string, big_five) in enumerate(zip(profile_string_list, big_five_list)):
+        if i > 1: continue
         human_intentions_hist, human_predicates_hist = [], []
-        profile_string = traits_summary_gpt4(data_path, i, scene_id, profile_string_complete, temperature_dict, model_dict, start_over=False)[0][1]
+        profile_string = traits_summary_gpt4(data_path, i, scene_id, [profile_string, big_five], temperature_dict, model_dict, start_over=False)[0][1]
 
         robot_intentions_hist, robot_predicates_hist = [], []
         inferred_traits = ""
 
+        vis_dir = pathlib.Path(data_path) / "gpt4_response" / "vis" / str(i).zfill(5) / scene_id
+        vis_csv_path = vis_dir / "vis.xlsx"
+        os.makedirs(vis_dir, exist_ok=True)
+        csv_data = []
+
         for j, time_ in enumerate(times):
-            # if j != 0: continue
+            # if j != 2: continue
             # human_retrieved_intentions = retrieve_memory(f"Current time: {time_}", human_intentions_hist, times, time_, predicates_num, decay_factor=0.95, top_k=13, retrieve_type="intention")
             human_retrieved_intentions = human_intentions_hist
             human_retrieved_predicates = retrieve_memory(f"Current time: {time_}", human_predicates_hist, times, time_, predicates_num, decay_factor=0.95, top_k=5, retrieve_type="predicate")
 
-            human_conversation_hist = intention_proposal_gpt4(data_path, i, scene_id, [j, time_], [human_retrieved_intentions, human_retrieved_predicates], room_list, profile_string, temperature_dict, model_dict, start_over=False)
+            human_conversation_hist = intention_proposal_gpt4(data_path, i, scene_id, [j, time_], [human_retrieved_intentions, human_retrieved_predicates], room_list, [profile_string, big_five], temperature_dict, model_dict, start_over=False)
             _, gt_intention_sentence_list, sampled_static_obj_dict_list = sample_obj_by_similarity(human_conversation_hist, static_obj_room_mapping, top_k=30)
             _, sampled_motion_list = sample_motion_by_similarity(human_conversation_hist, motion_sets_list, top_k=5)
             gt_intention_sentence, sampled_static_obj_dict, sampled_motion_list = gt_intention_sentence_list[0], sampled_static_obj_dict_list[0], sampled_motion_list[0]
@@ -887,11 +832,12 @@ if __name__ == "__main__":
 
             human_retrieved_predicates = retrieve_memory(f"Current time: {time_}. Intention: {gt_intention_sentence}", human_predicates_hist, times, time_, predicates_num, decay_factor=0.95, top_k=5, retrieve_type="predicate")
 
-            human_conversation_hist = predicates_proposal_gpt4(data_path, i, scene_id, [j, time_], [human_retrieved_intentions, human_retrieved_predicates], sampled_motion_list, [sampled_static_obj_dict, dynamic_obj_room_mapping], profile_string, human_conversation_hist, temperature_dict, model_dict, start_over=False)
-            human_conversation_hist = predicates_reflection_1_gpt4(data_path, i, scene_id, [j, time_], [human_retrieved_intentions, human_retrieved_predicates], sampled_motion_list, [sampled_static_obj_dict_list, dynamic_obj_room_mapping], profile_string, human_conversation_hist, temperature_dict, model_dict, start_over=False)
-            human_conversation_hist = predicates_reflection_2_gpt4(data_path, i, scene_id, [j, time_], [human_retrieved_intentions, human_retrieved_predicates], sampled_motion_list, [sampled_static_obj_dict_list, dynamic_obj_room_mapping], profile_string, human_conversation_hist, temperature_dict, model_dict, start_over=False)
+            human_conversation_hist = predicates_proposal_gpt4(data_path, i, scene_id, [j, time_], [human_retrieved_intentions, human_retrieved_predicates], sampled_motion_list, [sampled_static_obj_dict, dynamic_obj_room_mapping], [profile_string, big_five], human_conversation_hist, temperature_dict, model_dict, start_over=False)
+            human_conversation_hist = predicates_reflection_1_gpt4(data_path, i, scene_id, [j, time_], [human_retrieved_intentions, human_retrieved_predicates], sampled_motion_list, [sampled_static_obj_dict_list, dynamic_obj_room_mapping], [profile_string, big_five], human_conversation_hist, temperature_dict, model_dict, start_over=False)
+            human_conversation_hist = predicates_reflection_2_gpt4(data_path, i, scene_id, [j, time_], [human_retrieved_intentions, human_retrieved_predicates], sampled_motion_list, [sampled_static_obj_dict_list, dynamic_obj_room_mapping], [profile_string, big_five], human_conversation_hist, temperature_dict, model_dict, start_over=False)
 
             human_thoughts, human_acts = extract_thoughts_and_acts(human_conversation_hist[-1][1], search_txt=" Reason_human:")
+            if not human_thoughts: human_thoughts, human_acts = extract_thoughts_and_acts(human_conversation_hist[-1][1], search_txt="")
             human_predicates_hist.extend([f"{time_}.{k}: {human_thought}" for k, human_thought in enumerate(human_thoughts)])
 
             # =====================================================================================================================
@@ -907,9 +853,9 @@ if __name__ == "__main__":
             env.reset()
             observations = []
 
-            extracted_planning = extract_code("predicates_reflection", pathlib.Path(data_path) / "gpt4_response" / "human/predicates_reflection_2" / str(i).zfill(5) / scene_id, j)
-            
-            # if j == 0:
+            extracted_planning = extract_code("predicates_reflection_2", pathlib.Path(data_path) / "gpt4_response" / "human/predicates_reflection_2" / str(i).zfill(5) / scene_id, j)
+
+            # if j == 2:
             #     execute_humanoid_1(env, i, scene_id, time_, extracted_planning, motion_sets_list, [static_obj_room_mapping, dynamic_obj_room_mapping], [static_obj_trans_dict, dynamic_obj_trans_dict], room_dict)
 
 
@@ -920,12 +866,12 @@ if __name__ == "__main__":
             robot_retrieved_intentions = robot_intentions_hist
             robot_retrieved_predicates = retrieve_memory(f"Current time: {time_}", robot_predicates_hist, times, time_, predicates_num, decay_factor=0.95, top_k=5, retrieve_type="predicate")
 
-            robot_conversation_hist = intention_discovery_gpt4(data_path, i, scene_id, [j, time_], [os.path.join(video_dir, "robot_scene_camera_rgb_video"), os.path.join(video_dir, "human_third_rgb_video")], [robot_retrieved_intentions, robot_retrieved_predicates], inferred_traits, temperature_dict, model_dict, start_over=True)
+            robot_conversation_hist = intention_discovery_gpt4(data_path, i, scene_id, [j, time_], [os.path.join(video_dir, "robot_scene_camera_rgb_video"), os.path.join(video_dir, "human_third_rgb_video")], [robot_retrieved_intentions, robot_retrieved_predicates], inferred_traits, temperature_dict, model_dict, start_over=False)
             _, ps_intention_sentence_list, sampled_static_obj_dict_list = sample_obj_by_similarity(robot_conversation_hist, static_obj_room_mapping, top_k=30)
             ps_intention_sentence, sampled_static_obj_dict = ps_intention_sentence_list[0], sampled_static_obj_dict_list[0]
             confidence_intention = extract_confidence(robot_conversation_hist[0][1])
 
-            if confidence_intention > confidence_threshold:
+            if confidence_intention >= 0.9:
                 selected_intention_sentence = ps_intention_sentence
             else:
                 selected_intention_sentence = gt_intention_sentence
@@ -933,7 +879,7 @@ if __name__ == "__main__":
             
             robot_retrieved_predicates = retrieve_memory(f"Current time: {time_}. Intention: {selected_intention_sentence}", robot_predicates_hist, times, time_, predicates_num, decay_factor=0.95, top_k=5, retrieve_type="predicate")
 
-            robot_conversation_hist = predicates_discovery_gpt4(data_path, i, scene_id, [j, time_], [sampled_static_obj_dict, dynamic_obj_room_mapping], [robot_retrieved_intentions, robot_retrieved_predicates], inferred_traits, robot_conversation_hist, temperature_dict, model_dict, start_over=True)
+            robot_conversation_hist = predicates_discovery_gpt4(data_path, i, scene_id, [j, time_], [sampled_static_obj_dict, dynamic_obj_room_mapping], [robot_retrieved_intentions, robot_retrieved_predicates], inferred_traits, robot_conversation_hist, temperature_dict, model_dict, start_over=False)
             robot_thoughts, robot_acts = extract_thoughts_and_acts(robot_conversation_hist[-1][1])
             confidence_predicates = extract_confidences(robot_conversation_hist[-1][1])
 
@@ -944,7 +890,28 @@ if __name__ == "__main__":
                     robot_predicates_hist.append(f"{time_}.{k}: {human_thought}")
 
 
-            inferred_traits = traits_inference_gpt4(data_path, i, scene_id, [robot_intentions_hist, robot_predicates_hist], inferred_traits, temperature_dict, model_dict, start_over=True)[0][1]
+            inferred_traits = traits_inference_gpt4(data_path, i, scene_id, [j, time_], [robot_intentions_hist, robot_predicates_hist], inferred_traits, temperature_dict, model_dict, start_over=False)[0][1]
+            inferred_traits = extract_scores(inferred_traits)
+
+            big_five_mse = calculate_ocean_mse(big_five, inferred_traits)
+
+            for k in range(predicates_num):
+                if k == 0:
+                    csv_data.append([time_, gt_intention_sentence, ps_intention_sentence, confidence_intention, human_thoughts[k]+" "+ human_acts[k], robot_thoughts[k]+" "+ robot_acts[k], confidence_predicates[k], profile_string, big_five, inferred_traits, big_five_mse])
+                else:
+                    csv_data.append(["", "", "", "", human_thoughts[k]+" "+ human_acts[k], robot_thoughts[k]+" "+ robot_acts[k], confidence_predicates[k], "", "", "", ""])
+            csv_data.append(["", "", "", "", "", "", "", "", "", ""])
+
+
+        header = ["Time", "Human Intention", "Robot Intention", "Robot Intention Confidence", "Human Predicate", "Robot Predicate", "Robot Predicate Confidence", "Human Traits", "Human Big 5", "Robot Big 5", "MSE"]
+        df = pd.DataFrame(csv_data, columns=header)
+        with pd.ExcelWriter(vis_csv_path, engine='openpyxl', mode='w') as writer: 
+            df.to_excel(writer, index=False, sheet_name='vis')
+            for column in df:
+                column_length = max(df[column].astype(str).map(len).max(), len(column))
+                col_idx = df.columns.get_loc(column)
+                writer.sheets['vis'].column_dimensions[get_column_letter(col_idx+1)].width = column_length + 2
+
 
         #     print()
         #     print(time_)

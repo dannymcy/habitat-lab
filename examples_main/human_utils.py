@@ -76,6 +76,107 @@ from sentence_transformers import SentenceTransformer
 
 
 
+def read_human_data_okcupid(data_path):
+    csv_file_path = os.path.join(data_path, "humanoids/humanoid_data/okcupid_profiles.csv")
+    okcupid_data = pd.read_csv(csv_file_path)
+    profiles = okcupid_data[['age', 'sex', 'orientation', 'body_type', 'diet', 'drinks', 'education', 'ethnicity', 'height', 'job', 'location', 'offspring', 'pets', 'religion', 'smokes', 'essay0', 'essay1', 'essay2', 'essay3', 'essay4', 'essay5', 'essay6','essay7', 'essay8', 'essay9']]
+
+    profile_string_complete_list = []
+    profile_string_partial_list = []
+
+    for i in range(min(100, len(profiles))):
+        selected_profile = profiles.iloc[i]
+
+        # Create a one-paragraph string
+        profile_string_complete = (
+            f"Age: {selected_profile['age']}; "
+            f"Sex: {selected_profile['sex']}; "
+            f"Orientation: {selected_profile['orientation']}; "
+            f"Body Type: {selected_profile['body_type']}; "
+            f"Diet: {selected_profile['diet']}; "
+            f"Drinks: {selected_profile['drinks']}; "
+            f"Education: {selected_profile['education']}; "
+            f"Ethnicity: {selected_profile['ethnicity']}; "
+            f"Height: {selected_profile['height']}; "
+            f"Job: {selected_profile['job']}; "
+            f"Location: {selected_profile['location']}; "
+            f"Offspring: {selected_profile['offspring']}; "
+            f"Pets: {selected_profile['pets']}; "
+            f"Religion: {selected_profile['religion']}; "
+            f"Smokes: {selected_profile['smokes']}; "
+            f"Intro 1: {selected_profile['essay0']}; "
+            f"Intro 2: {selected_profile['essay1']}; "
+            f"Intro 3: {selected_profile['essay2']}; "
+            f"Intro 4: {selected_profile['essay3']}; "
+            f"Intro 5: {selected_profile['essay4']}; "
+            f"Intro 6: {selected_profile['essay5']}; "
+            f"Intro 7: {selected_profile['essay6']}; "
+            f"Intro 8: {selected_profile['essay7']}; "
+            f"Intro 9: {selected_profile['essay8']}; "    
+            f"Intro 10: {selected_profile['essay9']}"  
+        )
+
+        profile_string_partial = (
+            f"Age: {selected_profile['age']}; "
+            f"Sex: {selected_profile['sex']}; "
+            f"Orientation: {selected_profile['orientation']}; "
+            f"Body Type: {selected_profile['body_type']}; "
+            f"Diet: {selected_profile['diet']}; "
+            f"Drinks: {selected_profile['drinks']}; "
+            f"Education: {selected_profile['education']}; "
+            f"Ethnicity: {selected_profile['ethnicity']}; "
+            f"Height: {selected_profile['height']}; "
+            f"Job: {selected_profile['job']}; "
+            f"Location: {selected_profile['location']}; "
+            f"Offspring: {selected_profile['offspring']}; "
+            f"Pets: {selected_profile['pets']}; "
+            f"Religion: {selected_profile['religion']}; "
+            f"Smokes: {selected_profile['smokes']}."
+        )
+
+        profile_string_complete_list.append(profile_string_complete)
+        profile_string_partial_list.append(profile_string_partial)
+
+    return profile_string_complete_list, profile_string_partial_list
+
+
+def read_human_data_mypersonality(data_path):
+    csv_file_path = os.path.join(data_path, "humanoids/humanoid_data/mypersonality_final.csv")
+    mypersonality_data = pd.read_csv(csv_file_path, encoding='latin1')
+    
+    profile_dict = {}
+    big_five_dict = {}
+    row_count_dict = {}
+
+    for index, row in mypersonality_data.iterrows():
+        authid = row['#AUTHID']
+        status = row['STATUS']
+        
+        # Combine STATUS texts
+        if authid in profile_dict:
+            profile_dict[authid] += " " + status
+            row_count_dict[authid] += 1
+        else:
+            profile_dict[authid] = status
+            big_five_dict[authid] = {                
+                'openness': row['sOPN'],
+                'conscientiousness': row['sCON'],
+                'extroversion': row['sEXT'],
+                'agreeableness': row['sAGR'],
+                'neuroticism': row['sNEU']
+            }
+            row_count_dict[authid] = 1
+
+    # Sort the profiles based on the number of rows (descending order)
+    sorted_authids = sorted(row_count_dict, key=row_count_dict.get, reverse=True)
+    
+    # Create sorted lists
+    profile_string_list = [profile_dict[authid] for authid in sorted_authids]
+    big_five_list = [big_five_dict[authid] for authid in sorted_authids]
+
+    return profile_string_list, big_five_list
+
+
 def calculate_recency_scores(times, selected_time, predicates_num, decay_factor=0.95):
     # Find the index of the selected time
     selected_index = times.index(selected_time)
@@ -422,7 +523,7 @@ def predicates_reflection_1_gpt4(data_path, human_id, scene_id, time_tuple, retr
         user, res = reflect_predicates_1(time_, sampled_motion_list, obj_room_mapping, profile_string, retrieved_memory, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
         time.sleep(20)
     else:
-        user, res = reflect_predicates_1(time_, sampled_motion_list, obj_room_mapping, profile_string, retrieved_memory, output_dir, existing_response=load_response("predicates_reflection", output_dir, file_idx=file_idx), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
+        user, res = reflect_predicates_1(time_, sampled_motion_list, obj_room_mapping, profile_string, retrieved_memory, output_dir, existing_response=load_response("predicates_reflection_1", output_dir, file_idx=file_idx), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
     conversation_hist.append([user, res])
 
     return conversation_hist
@@ -437,7 +538,7 @@ def predicates_reflection_2_gpt4(data_path, human_id, scene_id, time_tuple, retr
         user, res = reflect_predicates_2(time_, sampled_motion_list, obj_room_mapping, profile_string, retrieved_memory, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
         time.sleep(20)
     else:
-        user, res = reflect_predicates_2(time_, sampled_motion_list, obj_room_mapping, profile_string, retrieved_memory, output_dir, existing_response=load_response("predicates_reflection", output_dir, file_idx=file_idx), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
+        user, res = reflect_predicates_2(time_, sampled_motion_list, obj_room_mapping, profile_string, retrieved_memory, output_dir, existing_response=load_response("predicates_reflection_2", output_dir, file_idx=file_idx), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
     conversation_hist.append([user, res])
     
     return conversation_hist
@@ -467,6 +568,34 @@ def most_similar_motion(free_motion, motion_list, top_k=1):
         sampled_motion_list.append(sampled_motion)
 
     return sampled_motion
+
+
+def most_similar_object(obj_name, obj_dict):
+    """
+    Given an object name, find the most similar object name in the given dictionary.
+    
+    :param obj_name: The name of the object to compare.
+    :param obj_dict: A dictionary where keys are object names.
+    :return: The most similar object name and its corresponding value from the dictionary.
+    """
+    model = SentenceTransformer("all-MiniLM-L6-v2")
+
+    # Encode the target object name
+    obj_name_embedding = model.encode([obj_name])
+
+    # Encode all the keys in the dictionary
+    dict_keys = list(obj_dict.keys())
+    dict_key_embeddings = model.encode(dict_keys)
+
+    # Compute similarities
+    similarities = np.dot(dict_key_embeddings, obj_name_embedding.T).flatten()
+
+    # Find the index of the most similar key
+    most_similar_idx = np.argmax(similarities)
+    most_similar_obj_name = dict_keys[most_similar_idx]
+
+    # Return the most similar object name and its corresponding value from the dictionary
+    return most_similar_obj_name, obj_dict[most_similar_obj_name]
 
 
 def collaboration_proposal_gpt4(data_path, scene_id, time_, sampled_motion_list, extracted_planning, predicate, thought, act, conversation_hist, temperature_dict, model_dict, start_over=False):

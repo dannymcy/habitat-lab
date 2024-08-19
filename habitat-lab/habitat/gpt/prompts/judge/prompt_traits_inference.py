@@ -11,15 +11,15 @@ from habitat.gpt.query import query
 def infer_traits_prompt(retrieved_memory, fuzzy_traits):
     contents = f"""
     Input:
-    1.  Previously inferred human traits: {fuzzy_traits} (ignore if empty—this means it's your first inference).
-    2.  Human activities at previous times: {retrieved_memory[0]} (ignore if empty—this means it's your first inference).
-    3.  Human predicates at previous times.ids: {retrieved_memory[1]} (ignore if empty—this means it's your first inference).
+    1.  Previously inferred Big Five personality scores: {fuzzy_traits} (ignore if empty—this means it's your first inference).
+    2.  Human intentions at previous times: {retrieved_memory[0]} (ignore if empty—this means it's your first inference).
+    3.  Human tasks at previous times.ids: {retrieved_memory[1]} (ignore if empty—this means it's your first inference).
 
-
-    Task: Infer human traits in a first-person tone based on the provided activities and predicates. Revise and expand on previously inferred traits if inconsistencies arise. Your output should focus on general personality traits.
+    Task: Infer Big Five personality traits (scale 0-5, float) based on provided intentions and tasks. Revise previously inferred scores if needed.
 
     Write in the following format. Do not output anything else:
-    Traits: xxx
+    Scores: {{'openness': a, 'conscientiousness': b, 'extroversion': c, 'agreeableness': d, 'neuroticism': e}}
+    Reasons: explain for each ocean.
     """
     return contents
 

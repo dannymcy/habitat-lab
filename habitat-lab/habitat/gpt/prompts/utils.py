@@ -146,19 +146,17 @@ def extract_code(prompt_name, prompt_path, file_idx, video_path=None, scene_id=N
         planning_section = False
 
         for line in lines[2:]:
-            if line.startswith("Revised Predicates:"):
+            if line.startswith("Revised Tasks:"):
                 planning_section = True
-                continue
-            elif line.startswith("Tracking:"):
-                planning_section = False
                 continue
             
             if planning_section:
-                if line.strip() != "":
-                    act_list = parse_act_line(line.strip())
+                if line.strip() != "" and "Thought:" in line:
                     thought_list = parse_thought_line(line.strip())
-                    predicate_acts.append(act_list)
                     predicate_thoughts.append(thought_list)
+                if line.strip() != "" and "Act:" in line:
+                    act_list = parse_act_line(line.strip())
+                    predicate_acts.append(act_list)
 
         result_dict[time] = {
             "Intention": intention,
@@ -189,10 +187,15 @@ def extract_thoughts_and_acts(text, search_txt=" Confidence:"):
     acts = []
 
     for line in lines:
-        if "Thought:" in line and "Act:" in line:
-            thought_part = line.split("Thought: ")[1].split(search_txt)[0].strip()
-            act_part = line.split("Act: ")[1].strip()
+        if "Thought:" in line:
+            if search_txt == "":
+                thought_part = line.split("Thought: ")[1].strip()
+            else:
+                thought_part = line.split("Thought: ")[1].split(search_txt)[0].strip()
             thoughts.append(thought_part)
+            
+        if "Act:" in line:
+            act_part = line.split("Act: ")[1].strip()
             acts.append(act_part)
 
     return thoughts, acts
@@ -211,3 +214,19 @@ def extract_confidences(text, search_txt=" Reason:"):
             confidences.append(float(confidence_part.rstrip('.')))
 
     return confidences
+
+
+def extract_scores(prompt_text):
+    # Regular expression to match the Scores dictionary in the prompt
+    pattern = r"Scores:\s*\{('openness':\s*[\d.]+,\s*'conscientiousness':\s*[\d.]+,\s*'extroversion':\s*[\d.]+,\s*'agreeableness':\s*[\d.]+,\s*'neuroticism':\s*[\d.]+)\}"
+    
+    # Search for the pattern in the prompt text
+    match = re.search(pattern, prompt_text)
+    
+    if match:
+        # Evaluate the dictionary string to convert it into a dictionary object
+        scores_str = "{" + match.group(1) + "}"
+        scores_dict = eval(scores_str)
+        return scores_dict
+    else:
+        raise ValueError("Scores dictionary not found in the prompt")

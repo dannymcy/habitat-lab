@@ -10,12 +10,14 @@ from habitat.gpt.query import query
 
 def summarize_traits_prompt(profile_string):
     contents = f"""
-    Input: Your human profile: {profile_string}.
+    Input: 
+    1. Your Big Five scores: {profile_string[1]} (scale 0-5)
+    2. Your human profile: {profile_string}
 
-    Task: Summarize the human traits in a first-person tone, focusing on how these traits impact daily activities, including even minor details. Do not miss any information.
+    Task: Summarize this person's Facebook posts into a first-person self-introduction. Provide a detailed description covering, if presented, the person's job, hobbies, daily activities, food preferences, social life, physical activity, entertainment preferences, travel habits, personal values, goals and aspirations, stress and coping mechanisms, technological use, cultural interests, health and wellness, community involvement, education, financial habits, and personal style. Also, include a comprehensive analysis of the Big Five personality traits, explaining how these scores impact their daily life.
 
     Write in the following format. Do not output anything else:
-    Traits: xxx
+    Profile: xxx
     """
     return contents
 

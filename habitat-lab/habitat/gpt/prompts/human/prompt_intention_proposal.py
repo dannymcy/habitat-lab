@@ -13,25 +13,25 @@ def propose_intention_prompt(time_, room_list, profile_string, retrieved_memory)
     Input:
     1.  Current time: {time_}.
     2.	A list of rooms in the house (ignore small spaces like closets): {room_list}.
-    3.  Your human profile: {profile_string}.
-    4.  Most relevant human activities proposed at previous times: {retrieved_memory[0]} (ignore if empty—this means it's the first activity of the day).
-    5.  Most relevant human predicates proposed at previous times.ids: {retrieved_memory[1]} (ignore if empty—this means it's the first predicate of the day).
+    3.  Your Big Five scores: {profile_string[1]} (scale 0-5) and human profile: {profile_string[0]}
+    4.  Most relevant human intentions proposed at previous times: {retrieved_memory[0]} (ignore if empty—this means it's the first intention of the day).
+    5.  Most relevant human tasks proposed at previous times.ids: {retrieved_memory[1]} (ignore if empty—this means it's the first task of the day).
 
-    You are a human living in the house. Propose your activity at current time.
+    You are a human living in the house. Propose your intention at current time.
 
     Constraints:
-    1.	Activity must align with your profile and be diverse yet reasonable based on the house layout and available objects.
-    2.	Activity must be high-level and either human-centric (e.g., hygiene, sport, leisure) or room-centric (e.g., clean, organize, set-up). Do not mention specific objects.
-    3.  Activity must have temporal dependence but be non-repetitive with the previous activities and predicates.
-    4.  Activity should be within the house.
+    1.	Intention must align with your Big 5 scores and reflect all aspects of the profile, and be diverse yet reasonable based on the house layout and available objects.
+    2.	Intention must be high-level and either human-centric (e.g., hygiene, sport, leisure) or room-centric (e.g., clean, organize, set-up). Do not mention specific objects.
+    3.  Intention must have temporal dependence but be non-repetitive with the previous intentions and tasks.
+    4.  Intention should be within the house.
     5. 	All objects are rigid and cannot deform, disassemble, or transform.
 
     Write in the following format. Do not output anything else:
     Time: xxx am/pm (e.g, 9 am)
     Intention: basic descriptions.
-    Reason_human: detailed descriptions of why it follows your profile.
-    Reason_activities: detailed descriptions of why it has temporal dependence with the previous, relevant activities at [list of time]. 
-    Reason_predicates: detailed descriptions of why it has temporal dependence with the previous, relevant predicates at [list of time.id].
+    Reason_human: detailed descriptions of why it follows your Big 5 scores and profile.
+    Reason_intentions: detailed descriptions of why it has temporal dependence with the previous, relevant intentions at [list of time]. 
+    Reason_tasks: detailed descriptions of why it has temporal dependence with the previous, relevant tasks at [list of time.id].
     """
     return contents
 
