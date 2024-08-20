@@ -68,7 +68,6 @@ from habitat.gpt.prompts.human.prompt_intention_proposal import propose_intentio
 from habitat.gpt.prompts.human.prompt_predicates_proposal import propose_predicates
 from habitat.gpt.prompts.human.prompt_predicates_reflection_1 import reflect_predicates_1
 from habitat.gpt.prompts.human.prompt_predicates_reflection_2 import reflect_predicates_2
-from habitat.gpt.prompts.human.prompt_collaboration_proposal import propose_collaboration
 from habitat.gpt.prompts.utils import load_response, extract_times, extract_intentions, extract_code
 
 from sentence_transformers import SentenceTransformer
@@ -596,17 +595,3 @@ def most_similar_object(obj_name, obj_dict):
 
     # Return the most similar object name and its corresponding value from the dictionary
     return most_similar_obj_name, obj_dict[most_similar_obj_name]
-
-
-def collaboration_proposal_gpt4(data_path, scene_id, time_, sampled_motion_list, extracted_planning, predicate, thought, act, conversation_hist, temperature_dict, model_dict, start_over=False):
-    output_dir = pathlib.Path(data_path) / "gpt4_response" / "human/collaboration_proposal" / scene_id
-    os.makedirs(output_dir, exist_ok=True)
-
-    if start_over:
-        user, res = propose_collaboration(time_, sampled_motion_list, extracted_planning, predicate, thought, act, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
-        time.sleep(20)
-    else:
-        user, res = propose_collaboration(time_, sampled_motion_list, extracted_planning, predicate, thought, act, output_dir, existing_response=load_response("collaboration_proposal", output_dir), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
-    conversation_hist.append([user, res])
-
-    return conversation_hist

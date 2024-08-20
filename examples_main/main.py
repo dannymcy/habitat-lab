@@ -780,10 +780,10 @@ if __name__ == "__main__":
         "intention_proposal": 0.7,
         "predicates_proposal": 0.7,
         "predicates_reflection": 0.25,
-        "intention_discovery": 0.7,
-        "predicates_discovery": 0.7,
+        "intention_discovery": 0.25,
+        "predicates_discovery": 0.25,
         "traits_inference": 0.25,
-        "collaboration_proposal": 0.7
+        "collaboration_approval": 0.25
     }
     # GPT-4 1106-preview is GPT-4 Turbo (https://openai.com/pricing)
     model_dict = {
@@ -791,10 +791,10 @@ if __name__ == "__main__":
         "intention_proposal": "gpt-4o",
         "predicates_proposal": "gpt-4o",
         "predicates_reflection": "gpt-4o",
-        "intention_discovery": "gpt-4o-mini",
-        "predicates_discovery": "gpt-4o-mini",
+        "intention_discovery": "gpt-4o",
+        "predicates_discovery": "gpt-4o",
         "traits_inference": "gpt-4o",
-        "collaboration_proposal": "gpt-4o-mini"
+        "collaboration_approval": "gpt-4o"
     }
 
 
@@ -806,13 +806,15 @@ if __name__ == "__main__":
     predicates_num = 5
 
     for i, (profile_string, big_five) in enumerate(zip(profile_string_list, big_five_list)):
-        if i > 1: continue
+        if i < 2 or i > 4: continue
         human_intentions_hist, human_predicates_hist = [], []
         profile_string = traits_summary_gpt4(data_path, i, scene_id, [profile_string, big_five], temperature_dict, model_dict, start_over=False)[0][1]
 
         robot_intentions_hist, robot_predicates_hist = [], []
         inferred_traits = ""
         inferred_traits_hist = []
+        intention_approval_hist, tasks_approval_hist = [], []
+        confidence_intention_hist, confidence_predicates_hist = [], []
 
         vis_dir = pathlib.Path(data_path) / "gpt4_response" / "vis" / str(i).zfill(5) / scene_id
         vis_csv_path = vis_dir / "vis.xlsx"
@@ -857,7 +859,7 @@ if __name__ == "__main__":
             extracted_planning = extract_code("predicates_reflection_2", pathlib.Path(data_path) / "gpt4_response" / "human/predicates_reflection_2" / str(i).zfill(5) / scene_id, j)
 
             # if j == 2:
-            #     execute_humanoid_1(env, i, scene_id, time_, extracted_planning, motion_sets_list, [static_obj_room_mapping, dynamic_obj_room_mapping], [static_obj_trans_dict, dynamic_obj_trans_dict], room_dict)
+            # execute_humanoid_1(env, i, scene_id, time_, extracted_planning, motion_sets_list, [static_obj_room_mapping, dynamic_obj_room_mapping], [static_obj_trans_dict, dynamic_obj_trans_dict], room_dict)
 
 
             # =====================================================================================================================
@@ -867,7 +869,7 @@ if __name__ == "__main__":
             robot_retrieved_intentions = robot_intentions_hist
             robot_retrieved_predicates = retrieve_memory(f"Current time: {time_}", robot_predicates_hist, times, time_, predicates_num, decay_factor=0.95, top_k=5, retrieve_type="predicate")
 
-            robot_conversation_hist = intention_discovery_gpt4(data_path, i, scene_id, [j, time_], [os.path.join(video_dir, "robot_scene_camera_rgb_video"), os.path.join(video_dir, "human_third_rgb_video")], [robot_retrieved_intentions, robot_retrieved_predicates], inferred_traits, temperature_dict, model_dict, start_over=False)
+            robot_conversation_hist = intention_discovery_gpt4(data_path, i, scene_id, [j, time_], [os.path.join(video_dir, "robot_scene_camera_rgb_video"), os.path.join(video_dir, "human_third_rgb_video")], [robot_retrieved_intentions, robot_retrieved_predicates], inferred_traits, temperature_dict, model_dict, start_over=True)
             _, ps_intention_sentence_list, sampled_static_obj_dict_list = sample_obj_by_similarity(robot_conversation_hist, static_obj_room_mapping, top_k=30)
             ps_intention_sentence, sampled_static_obj_dict = ps_intention_sentence_list[0], sampled_static_obj_dict_list[0]
             confidence_intention = extract_confidence(robot_conversation_hist[0][1])
@@ -880,9 +882,14 @@ if __name__ == "__main__":
             
             robot_retrieved_predicates = retrieve_memory(f"Current time: {time_}. Intention: {selected_intention_sentence}", robot_predicates_hist, times, time_, predicates_num, decay_factor=0.95, top_k=5, retrieve_type="predicate")
 
-            robot_conversation_hist = predicates_discovery_gpt4(data_path, i, scene_id, [j, time_], [sampled_static_obj_dict, dynamic_obj_room_mapping], [robot_retrieved_intentions, robot_retrieved_predicates], inferred_traits, robot_conversation_hist, temperature_dict, model_dict, start_over=False)
+            robot_conversation_hist = predicates_discovery_gpt4(data_path, i, scene_id, [j, time_], [sampled_static_obj_dict, dynamic_obj_room_mapping], [robot_retrieved_intentions, robot_retrieved_predicates], inferred_traits, robot_conversation_hist, temperature_dict, model_dict, start_over=True)
             robot_thoughts, robot_acts = extract_thoughts_and_acts(robot_conversation_hist[-1][1])
             confidence_predicates = extract_confidences(robot_conversation_hist[-1][1])
+
+            confidence_intention_hist.append(confidence_intention)
+            confidence_predicates_hist.extend(confidence_predicates)
+            confidence_intention_avg = calculate_confidence_avg(confidence_intention_hist)
+            confidence_predicates_avg = calculate_confidence_avg(confidence_predicates_hist)
 
             for k, (robot_thought, confidence_predicate, human_thought) in enumerate(zip(robot_thoughts, confidence_predicates, human_thoughts)):
                 if confidence_predicate > 0.85:
@@ -891,21 +898,27 @@ if __name__ == "__main__":
                     robot_predicates_hist.append(f"{time_}.{k}: {human_thought}")
 
 
-            inferred_traits = traits_inference_gpt4(data_path, i, scene_id, [j, time_], [robot_intentions_hist, robot_predicates_hist], inferred_traits, temperature_dict, model_dict, start_over=False)[0][1]
+            inferred_traits = traits_inference_gpt4(data_path, i, scene_id, [j, time_], [robot_intentions_hist, robot_predicates_hist], inferred_traits, temperature_dict, model_dict, start_over=True)[0][1]
             inferred_traits = extract_scores(inferred_traits)
             inferred_traits_hist.append(inferred_traits)
+            _, big_five_mse = calculate_ocean_mse(big_five, inferred_traits_hist)
 
-            big_five_mse = calculate_ocean_mse(big_five, inferred_traits_hist)
+            collaboration_approval = collaboration_approval_gpt4(data_path, i, scene_id, [j, time_], [gt_intention_sentence, ps_intention_sentence], human_thoughts, extract_inhand_obj_names(human_acts), robot_thoughts, robot_acts, temperature_dict, model_dict, start_over=True)[0][1]
+            intention_approval, tasks_approval, _, _ = extract_collaboration(collaboration_approval)
+            intention_approval_hist.append(intention_approval)
+            tasks_approval_hist.extend(tasks_approval)
+            intention_approval_score = calculate_accuracy(intention_approval_hist)
+            tasks_approval_score = calculate_accuracy(tasks_approval_hist)
 
             for k in range(predicates_num):
                 if k == 0:
-                    csv_data.append([time_, gt_intention_sentence, ps_intention_sentence, confidence_intention, human_thoughts[k]+" "+ human_acts[k], robot_thoughts[k]+" "+ robot_acts[k], confidence_predicates[k], profile_string, big_five, inferred_traits, big_five_mse])
+                    csv_data.append([time_, gt_intention_sentence, ps_intention_sentence, confidence_intention, confidence_intention_avg, human_thoughts[k]+" "+ human_acts[k], robot_thoughts[k]+" "+ robot_acts[k], confidence_predicates[k], confidence_predicates_avg, profile_string, big_five, inferred_traits, big_five_mse, intention_approval, intention_approval_score, tasks_approval, tasks_approval_score])
                 else:
-                    csv_data.append(["", "", "", "", human_thoughts[k]+" "+ human_acts[k], robot_thoughts[k]+" "+ robot_acts[k], confidence_predicates[k], "", "", "", ""])
+                    csv_data.append(["", "", "", "", "", human_thoughts[k]+" "+ human_acts[k], robot_thoughts[k]+" "+ robot_acts[k], confidence_predicates[k], "", "", "", "", "", "", "", "", ""])
             csv_data.append(["", "", "", "", "", "", "", "", "", ""])
 
 
-        header = ["Time", "Human Intention", "Robot Intention", "Robot Intention Confidence", "Human Predicate", "Robot Predicate", "Robot Predicate Confidence", "Human Traits", "Human Big 5", "Robot Big 5", "MSE"]
+        header = ["Time", "Human Intention", "Robot Intention", "Robot Intention Confidence", "Robot Intention Confidence Avg", "Human Predicate", "Robot Predicate", "Robot Predicate Confidence", "Robot Predicate Confidence Avg", "Human Traits", "Human Big 5", "Robot Big 5", "MSE", "Intention Approval", "Intention Approval Score", "Tasks Approval", "Tasks Approval Score"]
         df = pd.DataFrame(csv_data, columns=header)
         with pd.ExcelWriter(vis_csv_path, engine='openpyxl', mode='w') as writer: 
             df.to_excel(writer, index=False, sheet_name='vis')
@@ -913,17 +926,3 @@ if __name__ == "__main__":
                 column_length = max(df[column].astype(str).map(len).max(), len(column))
                 col_idx = df.columns.get_loc(column)
                 writer.sheets['vis'].column_dimensions[get_column_letter(col_idx+1)].width = column_length + 2
-
-
-        #     print()
-        #     print(time_)
-        #     print("Human Intention:", extracted_planning[f"Time: {time_}"]["Intention"])
-        #     print("Human Predicate Thoughts:",extracted_planning[f"Time: {time_}"]["Predicate_Thoughts"])
-        #     print("Human Predicate Acts:",extracted_planning[f"Time: {time_}"]["Predicate_Acts"])
-        #     print()
-        #     print("Robot Intention:", extract_intentions(robot_conversation_hist[0][1])[0])
-        #     print("Robot Predicate Thoughts:", robot_thought)
-        #     print("Robot Predicate Acts:", robot_act)
-        #     print()
-
-            # human_conversation_hist = collaboration_proposal_gpt4(data_path, scene_id, time_, sampled_motion_list[3], extracted_planning, predicate, thought, act, human_conversation_hist, temperature_dict, model_dict, start_over=False)

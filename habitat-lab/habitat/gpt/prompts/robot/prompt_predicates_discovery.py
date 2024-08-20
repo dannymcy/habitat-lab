@@ -12,19 +12,19 @@ def discover_predicates_prompt(time_, intention, retrieved_memory, fuzzy_traits,
     contents = f"""
     Input:
     1.  Human intention: {intention} at time: {time_}.
-    2.  A dict mapping rigid, static objects to their IDs and rooms: {obj_room_mapping[0]}.
+    2.  A dict mapping rigid, static furnitures to their IDs and rooms: {obj_room_mapping[0]}.
     3.  Inferred Big Five personality scores: {fuzzy_traits} (ignore if empty—this means it's your first collaboration with this human).
     4.  Most relevant human intentions discovered at previous times: {retrieved_memory[0]} (ignore if empty—this means it's the first intention of the day).
     5.  Most relevant human tasks discovered at previous times.ids: {retrieved_memory[1]} (ignore if empty—this means it's the first task of the day).
 
     You are a robot assisting a human.
+
     Instructions:
-    1.  Break down the human intention into 5 tasks.
-    2.	Task type: Deduce the human's intention and provide objects.
+    1.  Deduce the human's intention and break down into 5 tasks.
+    2.	Task type: For each human task, provide small, handable objects from a magical box. Furnitures in the dict are for room understanding and cannot be used.
     3.  For each task, propose if you should confirm it by specifying a confidence score (0 to 1).
-    4.  Provide small, handable objects from a magical box. Objects in the dict are for room understanding and cannot be used.
-    5. 	All objects are rigid and cannot deform, disassemble, or transform.
-    6.  Use Big 5 scores, and temporal dependence based on previous intentions and tasks as hints.
+    4. 	All objects are rigid and cannot deform, disassemble, or transform.
+    5.  Use Big 5 scores, and temporal dependence based on previous intentions and tasks as hints.
 
     Write in the following format. Do not output anything else:
     Time: xxx am/pm

@@ -65,6 +65,7 @@ data_path = os.path.join(dir_path, "data")
 os.chdir(dir_path)
 
 from habitat.gpt.prompts.judge.prompt_traits_inference import infer_traits
+from habitat.gpt.prompts.judge.prompt_collaboration_approval import approve_collaboration
 from habitat.gpt.prompts.utils import load_response
 
 from sentence_transformers import SentenceTransformer
@@ -109,7 +110,25 @@ def calculate_ocean_mse(ocean1, ocean2_list):
     
     mse /= len(ocean1)
     
-    return mse
+    return majority_voted_ocean, mse
+
+
+def calculate_confidence_avg(confidence_hist):
+    if not confidence_hist:
+        return 0.0
+
+    return sum(confidence_hist) / len(confidence_hist)
+
+
+def calculate_accuracy(results):
+    if not results:  # Check if the list is empty
+        return 0.0
+
+    correct_count = results.count('yes')
+    total_count = len(results)
+    
+    accuracy = correct_count / total_count
+    return accuracy
 
 
 def traits_inference_gpt4(data_path, human_id, scene_id, time_tuple, retrieved_memory, fuzzy_traits, temperature_dict, model_dict, start_over=False):
@@ -127,3 +146,18 @@ def traits_inference_gpt4(data_path, human_id, scene_id, time_tuple, retrieved_m
 
     return conversation_hist
 
+
+def collaboration_approval_gpt4(data_path, human_id, scene_id, time_tuple, intentions, human_thoughts, human_acts, robot_thoughts, robot_acts, temperature_dict, model_dict, start_over=False):
+    output_dir = pathlib.Path(data_path) / "gpt4_response" / "judge/collaboration_approval" / str(human_id).zfill(5) / scene_id
+    os.makedirs(output_dir, exist_ok=True)
+    conversation_hist = []
+    file_idx, time_ = time_tuple
+
+    if start_over:
+        user, res = approve_collaboration(time_, intentions, human_thoughts, human_acts, robot_thoughts, robot_acts, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
+        time.sleep(20)
+    else:
+        user, res = approve_collaboration(time_, intentions, human_thoughts, human_acts, robot_thoughts, robot_acts, output_dir, existing_response=load_response("collaboration_approval", output_dir, file_idx=file_idx), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
+    conversation_hist.append([user, res])
+
+    return conversation_hist

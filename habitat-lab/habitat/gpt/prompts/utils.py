@@ -230,3 +230,50 @@ def extract_scores(prompt_text):
         return scores_dict
     else:
         raise ValueError("Scores dictionary not found in the prompt")
+
+
+def extract_collaboration(text):
+    """
+    Extract the 'yes/no' responses for intention and tasks from the given text.
+    """
+    lines = text.split('\n')
+    intention = None
+    tasks = []
+    reasons_intention = None
+    reasons_tasks = []
+    is_reason_section = False
+    current_reason = None
+
+    for line in lines:
+        line = line.strip()
+        if line.startswith("Intention:"):
+            intention = line.replace("Intention:", "").strip()
+        elif line.startswith("Tasks:"):
+            tasks = line.replace("Tasks:", "").strip().strip("[]").split(", ")
+        elif line.startswith("Reasons_intention:"):
+            reasons_intention = line.replace("Reasons_intention:", "").strip()
+            current_reason = "tasks"
+        elif line.startswith("Reasons_tasks:"):
+            is_reason_section = True
+        elif is_reason_section and line:
+            reasons_tasks.append(line.strip())
+
+    return intention, tasks, reasons_intention, reasons_tasks
+
+
+def extract_inhand_obj_names(objects_list):
+    """
+    Extract the inhand_obj_name from each item in the list of object descriptions.
+    """
+    inhand_obj_names = []
+    
+    for obj in objects_list:
+        # Find the substring that starts with 'inhand_obj_name:' and extract its value
+        start_index = obj.find("inhand_obj_name:") + len("inhand_obj_name:")
+        end_index = obj.find(",", start_index)
+        if end_index == -1:  # Handle the case where inhand_obj_name is at the end
+            end_index = obj.find("]", start_index)
+        inhand_obj_name = obj[start_index:end_index].strip()
+        inhand_obj_names.append(inhand_obj_name)
+    
+    return inhand_obj_names
