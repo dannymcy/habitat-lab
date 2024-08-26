@@ -191,7 +191,7 @@ def calculate_recency_scores(times, selected_time, predicates_num, decay_factor=
     return intentions_recency, predicates_recency
 
 
-def calculate_relevance_scores(gt_text, activity_list):
+def calculate_relevance_scores(gt_text, activity_list, DEVICE):
     """
     Compute similarity scores between a given text and a list of activities.
     If activity_list is None, return None.
@@ -203,7 +203,7 @@ def calculate_relevance_scores(gt_text, activity_list):
         """
         Compute semantic similarity between the given text and activities.
         """
-        model = SentenceTransformer("all-MiniLM-L6-v2")
+        model = SentenceTransformer("all-MiniLM-L6-v2", device=DEVICE)
         
         # Encode the ground truth text and activity list
         gt_embedding = model.encode([gt_text])  # Note the input is a list
@@ -219,13 +219,13 @@ def calculate_relevance_scores(gt_text, activity_list):
     return similarities
 
 
-def retrieve_memory(gt_text, activity_list, times, selected_time, predicates_num, decay_factor=0.95, top_k=5, retrieve_type="intention"):
+def retrieve_memory(gt_text, activity_list, times, selected_time, predicates_num, DEVICE, decay_factor=0.95, top_k=5, retrieve_type="intention"):
     # Check if activity_list is None
     if not activity_list:
         return []
 
     intentions_recency, predicates_recency = calculate_recency_scores(times, selected_time, predicates_num, decay_factor=0.95)
-    relevance_scores = calculate_relevance_scores(gt_text, activity_list)
+    relevance_scores = calculate_relevance_scores(gt_text, activity_list, DEVICE)
     recency_scores = intentions_recency if retrieve_type == "intention" else predicates_recency
 
     if len(relevance_scores) != len(recency_scores):
@@ -418,7 +418,7 @@ def get_motion_pkl_path(motion_set_name, motion_dict):
     return motion_dict.get(motion_set_name, None)
 
 
-def sample_obj_by_similarity(conversation_hist, object_dict, top_k=30):
+def sample_obj_by_similarity(conversation_hist, object_dict, DEVICE, top_k=30):
     """
     Extract intentions from conversation history and compute similarity scores with object names.
     """
@@ -426,7 +426,7 @@ def sample_obj_by_similarity(conversation_hist, object_dict, top_k=30):
         """
         Compute semantic similarity between intention sentences and object names.
         """
-        model = SentenceTransformer("all-MiniLM-L6-v2")
+        model = SentenceTransformer("all-MiniLM-L6-v2", device=DEVICE)
         
         # Get object names with rooms
         object_names = [f"{name} in {data[1]}" for name, data in object_dict.items()]
@@ -463,7 +463,7 @@ def sample_obj_by_similarity(conversation_hist, object_dict, top_k=30):
     return times, intention_sentences, sampled_objects_dict_list
 
 
-def sample_motion_by_similarity(conversation_hist, motion_list, top_k=5):
+def sample_motion_by_similarity(conversation_hist, motion_list, DEVICE, top_k=5):
     """
     Extract intentions from conversation history and compute similarity scores with motions.
     """
@@ -471,7 +471,7 @@ def sample_motion_by_similarity(conversation_hist, motion_list, top_k=5):
         """
         Compute semantic similarity between intention sentences and motions.
         """
-        model = SentenceTransformer("all-MiniLM-L6-v2")
+        model = SentenceTransformer("all-MiniLM-L6-v2", device=DEVICE)
         
         # Encode sentences
         intention_embeddings = model.encode(intention_sentences)
@@ -543,9 +543,9 @@ def predicates_reflection_2_gpt4(data_path, human_id, scene_id, time_tuple, retr
     return conversation_hist
 
 
-def most_similar_motion(free_motion, motion_list, top_k=1):
+def most_similar_motion(free_motion, motion_list, DEVICE, top_k=1):
     def compute_similarity(free_motion, motion_list):
-        model = SentenceTransformer("all-MiniLM-L6-v2")
+        model = SentenceTransformer("all-MiniLM-L6-v2", device=DEVICE)
         
         # Encode sentences
         emb = model.encode(free_motion)
@@ -569,7 +569,7 @@ def most_similar_motion(free_motion, motion_list, top_k=1):
     return sampled_motion
 
 
-def most_similar_object(obj_name, obj_dict):
+def most_similar_object(obj_name, obj_dict, DEVICE):
     """
     Given an object name, find the most similar object name in the given dictionary.
     
@@ -577,7 +577,7 @@ def most_similar_object(obj_name, obj_dict):
     :param obj_dict: A dictionary where keys are object names.
     :return: The most similar object name and its corresponding value from the dictionary.
     """
-    model = SentenceTransformer("all-MiniLM-L6-v2")
+    model = SentenceTransformer("all-MiniLM-L6-v2", device=DEVICE)
 
     # Encode the target object name
     obj_name_embedding = model.encode([obj_name])

@@ -261,7 +261,7 @@ def extract_collaboration(text):
     return intention, tasks, reasons_intention, reasons_tasks
 
 
-def extract_inhand_obj_names(objects_list):
+def extract_inhand_obj_human(objects_list):
     """
     Extract the inhand_obj_name from each item in the list of object descriptions.
     """
@@ -277,3 +277,14 @@ def extract_inhand_obj_names(objects_list):
         inhand_obj_names.append(inhand_obj_name)
     
     return inhand_obj_names
+
+
+def extract_inhand_obj_robot(input_list):
+    values = []
+    for item in input_list:
+        # Remove the square brackets at the beginning and end
+        stripped_item = item.strip('[]')
+        # Split the string by the colon and take the second part
+        value = stripped_item.split(': ')[1]
+        values.append(value)
+    return values

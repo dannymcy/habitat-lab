@@ -70,7 +70,62 @@ from habitat.gpt.prompts.utils import load_response
 
 from sentence_transformers import SentenceTransformer
 
+from transformers import (AutoTokenizer,
+                          MistralForSequenceClassification, 
+                          BitsAndBytesConfig, 
+                          Trainer, 
+                          TrainingArguments)
+from datasets import Dataset, DatasetDict, load_dataset
+from peft import (LoraConfig, 
+                  PeftConfig, 
+                  PeftModel, 
+                  get_peft_model,
+                  prepare_model_for_kbit_training)
+from sklearn.metrics import f1_score
+from accelerate import dispatch_model
 
+
+
+
+def set_seed(seed: int):
+    """
+    Set the seed for reproducibility across various libraries.
+
+    Parameters:
+    seed (int): The seed value to set.
+    """
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    
+    # If you are using a GPU, you should also set the seed for CUDA operations
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)  # If you are using multi-GPU
+        
+        # Ensure deterministic behavior in CUDA operations (optional)
+        # torch.backends.cudnn.deterministic = True
+        # torch.backends.cudnn.benchmark = False
+
+
+def temperature_scaling(scores, temperature=0.5):
+    scores = np.array(scores)
+    scaled_scores = np.exp(np.log(scores + 1e-9) / temperature)
+    scaled_scores = scaled_scores / scaled_scores.max()
+    return scaled_scores.tolist()
+
+
+def temperature_scaling_single_score(score_list, temperature=2.0, epsilon=1e-9):
+    score = np.clip(score_list[0], epsilon, 1 - epsilon)  # Clip score to avoid 0 or 1
+    logit = np.log(score / (1 - score))  # Convert the probability to logit
+    scaled_logit = logit / temperature  # Apply temperature scaling
+    scaled_score = 1 / (1 + np.exp(-scaled_logit))  # Convert back to probability
+    return [scaled_score]  # Return as a list with a single item
+
+
+def add_constant_scaling(scores, C=0.4):
+    adjusted_scores = [max(min(score + C, 1), 0) for score in scores]
+    return adjusted_scores
 
 
 def calculate_ocean_mse(ocean1, ocean2_list):
@@ -161,3 +216,179 @@ def collaboration_approval_gpt4(data_path, human_id, scene_id, time_tuple, inten
     conversation_hist.append([user, res])
 
     return conversation_hist
+
+
+def compute_metrics(pred):
+    labels = pred.label_ids
+    preds = pred.predictions.argmax(-1)
+    f1_result = f1_score(labels, preds, average='weighted')
+    return {'f1_score': f1_result}
+
+
+def select_model(checkpoint_dir=None, pretrained=True):
+    model_checkpoint = checkpoint_dir if pretrained else 'mistralai/Mistral-7B-v0.1'
+        
+    # bnb_config = BitsAndBytesConfig(
+    #     load_in_4bit = True,
+    #     bnb_4bit_quant_type = 'nf4',
+    #     bnb_4bit_compute_dtype = torch.bfloat16,
+    #     bnb_4bit_use_double_quant = True,
+    # )
+
+
+    model = MistralForSequenceClassification.from_pretrained(
+        model_checkpoint,
+        use_auth_token=os.environ['HUGGINGFACE_TOKEN'],  
+        num_labels=2,
+        # quantization_config=bnb_config,
+        device_map='balanced',
+        low_cpu_mem_usage=True,  # Ensure this is set to True for 4-bit/8-bit models
+        trust_remote_code=True
+    )
+    
+    # Lora Configuration
+    model = prepare_model_for_kbit_training(model)
+
+    peft_config = LoraConfig(
+        lora_alpha=16,
+        lora_dropout=0.1,
+        r=2,
+        bias='none',
+        task_type='SEQ_CLS',
+        target_modules=['q_proj', 'v_proj']
+    )
+    model = get_peft_model(model, peft_config)
+    
+    return model
+
+
+def create_tokenizer(model_checkpoint):
+    # Load & Tokenize Data
+    tokenizer = AutoTokenizer.from_pretrained(model_checkpoint)
+    tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.add_eos_token = True
+    tokenizer.add_bos_token, tokenizer.add_eos_token
+    
+    return tokenizer
+
+
+def train_model(epoch, data_train, data_test, output_path, checkpoint_dir=None, pretrained=True):
+    model = select_model(checkpoint_dir=checkpoint_dir, pretrained=pretrained)
+    model.train()
+    output_dir = str(pathlib.Path(output_path).parent)
+    tokenizer = create_tokenizer(checkpoint_dir) if pretrained else create_tokenizer('mistralai/Mistral-7B-v0.1')
+
+    def tokenize(batch):
+        return tokenizer(batch['text'], truncation=True)
+
+    train_ds = Dataset.from_dict({"text": [d["text"] for d in data_train], "label": [d["label"] for d in data_train]})
+    test_ds = Dataset.from_dict({"text": [d["text"] for d in data_test], "label": [d["label"] for d in data_test]})
+
+    ds_dict = DatasetDict({
+        "train": train_ds,
+        "test": test_ds
+    })
+
+    ds = ds_dict["train"]
+    ds = ds.map(tokenize, batched=True)
+
+    # Fine-tune LLM 
+    training_args = TrainingArguments(
+        output_dir=output_dir,
+        learning_rate=5e-5,
+        per_device_train_batch_size=1,
+        num_train_epochs=epoch,
+        weight_decay=0.01,
+        save_strategy="epoch",
+        save_steps=1,
+        save_total_limit=1,
+    )
+
+    trainer = Trainer(
+        model=model,
+        args=training_args,
+        train_dataset=ds,
+        tokenizer=tokenizer,
+        compute_metrics=compute_metrics,
+    )
+    trainer.train()
+
+    checkpoints = [d for d in os.listdir(output_dir) if d.startswith("checkpoint")]
+    if checkpoints:
+        checkpoint_path = checkpoints[0] 
+
+        if os.path.exists(output_path):
+            # Remove all contents of output_path, but not the directory itself
+            for item in os.listdir(output_path):
+                item_path = os.path.join(output_path, item)
+                if os.path.isfile(item_path) or os.path.islink(item_path):
+                    os.remove(item_path)
+                elif os.path.isdir(item_path):
+                    shutil.rmtree(item_path)
+
+        os.rename(os.path.join(output_dir, checkpoint_path), output_path)
+
+
+
+def test_model(data_test, checkpoint_dir, cls_type="traits", pretrained=True):
+    model = select_model(checkpoint_dir=checkpoint_dir, pretrained=pretrained)
+    model.eval()
+    tokenizer = create_tokenizer(checkpoint_dir) if pretrained else create_tokenizer('mistralai/Mistral-7B-v0.1')
+
+    confidences = []
+    for data in data_test:
+        text = data["text"]
+        inputs = tokenizer(text, return_tensors="pt")
+
+        with torch.no_grad():
+            logits = model(**inputs).logits
+            probs = torch.nn.functional.softmax(logits, dim=-1)
+            confidence_scores = probs.numpy().tolist()[0]
+            confidences.append(confidence_scores[1])  # label 1 is the acceptance
+
+    if len(confidences) > 1:
+        if cls_type == "traits":
+            confidences = add_constant_scaling(temperature_scaling(confidences, temperature=0.5), C=-0.4)
+        else:
+            confidences = add_constant_scaling(temperature_scaling(confidences, temperature=1.0), C=0.4)
+    else:
+        confidences = temperature_scaling_single_score(confidences, temperature=10.0)
+
+    print()
+    print(checkpoint_dir)
+    print(54321, f"Confidence Scores: {confidences}")
+    print()
+
+    return confidences
+
+
+def create_data(texts, labels, time_, traits, hist, data_type="intention", cls_type="traits"):
+    if cls_type == "traits":
+        if data_type == "intention":
+            if labels is None: labels = 0
+            data_train = [{"text": f"Big Five human traits: {traits}. Time: {time_}. Intention: {texts}", "label": {labels}}]
+        elif data_type == "predicates":
+            data_train = []
+            thoughts, acts = texts[0], texts[1]
+            for (thought, act, label) in zip(thoughts, acts, labels):
+                if label is None: label = 0
+                data_train.append({"text": f"Big Five human traits: {traits}. Time: {time_}. Task: {thought} Needed object: {act}.", "label": {label}})
+    
+    elif cls_type == "temporal":
+        intentions_hist, predicates_hist = hist[0], hist[1]
+        if data_type == "intention":
+            if labels is None: labels = 0
+            data_train = [{"text": f"Most relevant intentions at previous times: {intentions_hist}. Most relevant tasks at previous times: {predicates_hist}. Current time: {time_}. Current intention: {texts}", "label": {labels}}]
+        elif data_type == "predicates":
+            data_train = []
+            thoughts, acts = texts[0], texts[1]
+            for (thought, act, label) in zip(thoughts, acts, labels):
+                if label is None: label = 0
+                data_train.append({"text": f"Most relevant intentions at previous times: {intentions_hist}. Most relevant tasks at previous times: {predicates_hist}. Current time: {time_}. Current task: {thought} Needed object: {act}.", "label": {label}})
+    
+    data_test = data_train
+    # print()
+    # print(12345, data_test)
+    # print()
+    return data_train, data_test
+    

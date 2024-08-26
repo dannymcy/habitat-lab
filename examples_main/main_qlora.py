@@ -667,12 +667,12 @@ def execute_humanoid_1(env, human_id, scene_id, time_, extracted_planning, motio
                 break
         
         if object_trans is None:  # the object is not found in the dict, because of mistake made by VLM
-            _, (_, object_trans, object_bb) = most_similar_object(step[2], obj_trans_dict_to_search)
+            _, (_, object_trans, object_bb) = most_similar_object(step[2], obj_trans_dict_to_search, DEVICE)
         
         walk_to(env, i, humanoid_rearrange_controller, object_trans, object_bb, obj_trans_dict_to_search, room_dict)
         
         if step[0] == 1:
-            selected_motion = most_similar_motion(step[4], motion_sets_list)[0]
+            selected_motion = most_similar_motion(step[4], motion_sets_list, DEVICE)[0]
             customized_humanoid_motion(env, convert_helper, folder_dict, get_motion_pkl_path(selected_motion, motion_dict))
             print()
             print(selected_motion)
@@ -703,6 +703,11 @@ def execute_humanoid_1(env, human_id, scene_id, time_, extracted_planning, motio
 
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
+DEVICE = "cuda:2"
+set_seed(42)
+
+# conda activate /hdd2/chenyang/Dynamic_Human_Robot_Value_Alignments/env
+# CUDA_VISIBLE_DEVICES="1,2,3" python examples_main/main_qlora.py
 if __name__ == "__main__":
     output_dir = os.path.join(data_path, "interactive_play_replays")
     os.makedirs(output_dir, exist_ok=True)
@@ -804,9 +809,11 @@ if __name__ == "__main__":
              '5 pm', '6 pm', '7 pm', '8 pm', '9 pm'
     ]
     predicates_num = 5
+    qlora_traits_intention_dir, qlora_temporal_intention_dir, qlora_traits_predicates_dir, qlora_temporal_predicates_dir = "", "", "", ""
+    confidence_intention_threshold, confidence_predicate_threshold = 0.82, 0.65
 
     for i, (profile_string, big_five) in enumerate(zip(profile_string_list, big_five_list)):
-        if i < 2 or i > 4: continue
+        if i > 4: continue
         human_intentions_hist, human_predicates_hist = [], []
         profile_string = traits_summary_gpt4(data_path, i, scene_id, [profile_string, big_five], temperature_dict, model_dict, start_over=False)[0][1]
 
@@ -816,32 +823,40 @@ if __name__ == "__main__":
         intention_approval_hist, tasks_approval_hist = [], []
         confidence_intention_hist, confidence_predicates_hist = [], []
 
+        prev_qlora_traits_intention_dir, prev_qlora_temporal_intention_dir = qlora_traits_intention_dir, qlora_temporal_intention_dir
+        prev_qlora_traits_predicates_dir, prev_qlora_temporal_predicates_dir = qlora_traits_predicates_dir, qlora_temporal_predicates_dir
+        data_train_traits_intention, data_train_temporal_intention, data_train_traits_predicates, data_train_temporal_predicates = [], [], [], []
+
         vis_dir = pathlib.Path(data_path) / "gpt4_response" / "vis" / str(i).zfill(5) / scene_id
         vis_csv_path = vis_dir / "vis.xlsx"
+        vis_txt_path = vis_dir / "vis.txt"
         os.makedirs(vis_dir, exist_ok=True)
         csv_data = []
 
         for j, time_ in enumerate(times):
-            # if j != 2: continue
-            # human_retrieved_intentions = retrieve_memory(f"Current time: {time_}", human_intentions_hist, times, time_, predicates_num, decay_factor=0.95, top_k=13, retrieve_type="intention")
+            # if j != 0: continue
+            # Human Proposing Intention
+            # human_retrieved_intentions = retrieve_memory(f"Current time: {time_}", human_intentions_hist, times, time_, predicates_num, DEVICE, decay_factor=0.95, top_k=13, retrieve_type="intention")
             human_retrieved_intentions = human_intentions_hist
-            human_retrieved_predicates = retrieve_memory(f"Current time: {time_}", human_predicates_hist, times, time_, predicates_num, decay_factor=0.95, top_k=5, retrieve_type="predicate")
+            human_retrieved_predicates = retrieve_memory(f"Current time: {time_}", human_predicates_hist, times, time_, predicates_num, DEVICE, decay_factor=0.95, top_k=5, retrieve_type="predicate")
 
             human_conversation_hist = intention_proposal_gpt4(data_path, i, scene_id, [j, time_], [human_retrieved_intentions, human_retrieved_predicates], room_list, [profile_string, big_five], temperature_dict, model_dict, start_over=False)
-            _, gt_intention_sentence_list, sampled_static_obj_dict_list = sample_obj_by_similarity(human_conversation_hist, static_obj_room_mapping, top_k=30)
-            _, sampled_motion_list = sample_motion_by_similarity(human_conversation_hist, motion_sets_list, top_k=5)
-            gt_intention_sentence, sampled_static_obj_dict, sampled_motion_list = gt_intention_sentence_list[0], sampled_static_obj_dict_list[0], sampled_motion_list[0]
+            _, gt_intention_sentence_list, human_sampled_static_obj_dict_list = sample_obj_by_similarity(human_conversation_hist, static_obj_room_mapping, DEVICE, top_k=30)
+            _, sampled_motion_list = sample_motion_by_similarity(human_conversation_hist, motion_sets_list, DEVICE, top_k=5)
+            gt_intention_sentence, human_sampled_static_obj_dict, sampled_motion_list = gt_intention_sentence_list[0], human_sampled_static_obj_dict_list[0], sampled_motion_list[0]
             human_intentions_hist.append(f"{time_}: {gt_intention_sentence}")
 
-            human_retrieved_predicates = retrieve_memory(f"Current time: {time_}. Intention: {gt_intention_sentence}", human_predicates_hist, times, time_, predicates_num, decay_factor=0.95, top_k=5, retrieve_type="predicate")
+            # Human Proposing Predicates
+            human_retrieved_predicates = retrieve_memory(f"Current time: {time_}. Intention: {gt_intention_sentence}", human_predicates_hist, times, time_, predicates_num, DEVICE, decay_factor=0.95, top_k=5, retrieve_type="predicate")
 
-            human_conversation_hist = predicates_proposal_gpt4(data_path, i, scene_id, [j, time_], [human_retrieved_intentions, human_retrieved_predicates], sampled_motion_list, [sampled_static_obj_dict, dynamic_obj_room_mapping], [profile_string, big_five], human_conversation_hist, temperature_dict, model_dict, start_over=False)
-            human_conversation_hist = predicates_reflection_1_gpt4(data_path, i, scene_id, [j, time_], [human_retrieved_intentions, human_retrieved_predicates], sampled_motion_list, [sampled_static_obj_dict_list, dynamic_obj_room_mapping], [profile_string, big_five], human_conversation_hist, temperature_dict, model_dict, start_over=False)
-            human_conversation_hist = predicates_reflection_2_gpt4(data_path, i, scene_id, [j, time_], [human_retrieved_intentions, human_retrieved_predicates], sampled_motion_list, [sampled_static_obj_dict_list, dynamic_obj_room_mapping], [profile_string, big_five], human_conversation_hist, temperature_dict, model_dict, start_over=False)
+            human_conversation_hist = predicates_proposal_gpt4(data_path, i, scene_id, [j, time_], [human_retrieved_intentions, human_retrieved_predicates], sampled_motion_list, [human_sampled_static_obj_dict, dynamic_obj_room_mapping], [profile_string, big_five], human_conversation_hist, temperature_dict, model_dict, start_over=False)
+            human_conversation_hist = predicates_reflection_1_gpt4(data_path, i, scene_id, [j, time_], [human_retrieved_intentions, human_retrieved_predicates], sampled_motion_list, [human_sampled_static_obj_dict, dynamic_obj_room_mapping], [profile_string, big_five], human_conversation_hist, temperature_dict, model_dict, start_over=False)
+            human_conversation_hist = predicates_reflection_2_gpt4(data_path, i, scene_id, [j, time_], [human_retrieved_intentions, human_retrieved_predicates], sampled_motion_list, [human_sampled_static_obj_dict, dynamic_obj_room_mapping], [profile_string, big_five], human_conversation_hist, temperature_dict, model_dict, start_over=False)
 
             human_thoughts, human_acts = extract_thoughts_and_acts(human_conversation_hist[-1][1], search_txt=" Reason_human:")
             if not human_thoughts: human_thoughts, human_acts = extract_thoughts_and_acts(human_conversation_hist[-1][1], search_txt="")
             human_predicates_hist.extend([f"{time_}.{k}: {human_thought}" for k, human_thought in enumerate(human_thoughts)])
+
 
             # =====================================================================================================================
             # query the observation of each of the agents
@@ -858,67 +873,190 @@ if __name__ == "__main__":
 
             extracted_planning = extract_code("predicates_reflection_2", pathlib.Path(data_path) / "gpt4_response" / "human/predicates_reflection_2" / str(i).zfill(5) / scene_id, j)
 
-            # if j == 2:
-            # execute_humanoid_1(env, i, scene_id, time_, extracted_planning, motion_sets_list, [static_obj_room_mapping, dynamic_obj_room_mapping], [static_obj_trans_dict, dynamic_obj_trans_dict], room_dict)
+            # if j == 0:
+            #     execute_humanoid_1(env, i, scene_id, time_, extracted_planning, motion_sets_list, [static_obj_room_mapping, dynamic_obj_room_mapping], [static_obj_trans_dict, dynamic_obj_trans_dict], room_dict)
 
 
             # =====================================================================================================================
+            # Robot Inferring Intentions
             video_dir_search_pattern = os.path.join(output_dir, f"human/{str(i).zfill(5)}/{scene_id}/*_{time_}")
             video_dir = glob.glob(video_dir_search_pattern)[0]
     
             robot_retrieved_intentions = robot_intentions_hist
-            robot_retrieved_predicates = retrieve_memory(f"Current time: {time_}", robot_predicates_hist, times, time_, predicates_num, decay_factor=0.95, top_k=5, retrieve_type="predicate")
+            robot_retrieved_predicates = retrieve_memory(f"Current time: {time_}", robot_predicates_hist, times, time_, predicates_num, DEVICE, decay_factor=0.95, top_k=5, retrieve_type="predicate")
 
             robot_conversation_hist = intention_discovery_gpt4(data_path, i, scene_id, [j, time_], [os.path.join(video_dir, "robot_scene_camera_rgb_video"), os.path.join(video_dir, "human_third_rgb_video")], [robot_retrieved_intentions, robot_retrieved_predicates], inferred_traits, temperature_dict, model_dict, start_over=True)
-            _, ps_intention_sentence_list, sampled_static_obj_dict_list = sample_obj_by_similarity(robot_conversation_hist, static_obj_room_mapping, top_k=30)
-            ps_intention_sentence, sampled_static_obj_dict = ps_intention_sentence_list[0], sampled_static_obj_dict_list[0]
-            confidence_intention = extract_confidence(robot_conversation_hist[0][1])
-
-            if confidence_intention >= 0.9:
+            _, ps_intention_sentence_list, robot_sampled_static_obj_dict_list = sample_obj_by_similarity(robot_conversation_hist, static_obj_room_mapping, DEVICE, top_k=30)
+            ps_intention_sentence, robot_sampled_static_obj_dict = ps_intention_sentence_list[0], robot_sampled_static_obj_dict_list[0]
+        
+            _, data_tmp_traits = create_data(ps_intention_sentence, None, time_, inferred_traits, [robot_retrieved_intentions, robot_retrieved_predicates], data_type="intention", cls_type="traits")
+            _, data_tmp_temporal = create_data(ps_intention_sentence, None, time_, inferred_traits, [robot_retrieved_intentions, robot_retrieved_predicates], data_type="intention", cls_type="temporal")
+            if i == 0 and j == 0:
+                confidence_intention_traits = test_model(data_tmp_traits, None, pretrained=False)[0]
+                torch.cuda.empty_cache()
+                confidence_intention_temporal = test_model(data_tmp_temporal, None, pretrained=False)[0]
+                torch.cuda.empty_cache()
+            elif i > 0 and j == 0:
+                confidence_intention_traits = test_model(data_tmp_traits, prev_qlora_traits_intention_dir, pretrained=True)[0]
+                torch.cuda.empty_cache()
+                confidence_intention_temporal = test_model(data_tmp_temporal, prev_qlora_temporal_intention_dir, pretrained=True)[0]
+                torch.cuda.empty_cache()
+            else:
+                confidence_intention_traits = test_model(data_tmp_traits, qlora_traits_intention_dir, pretrained=True)[0]
+                torch.cuda.empty_cache()
+                confidence_intention_temporal = test_model(data_tmp_temporal, qlora_temporal_intention_dir, pretrained=True)[0]
+                torch.cuda.empty_cache()
+            
+            confidence_intention = 0.7 * confidence_intention_traits + 0.3 * confidence_intention_temporal
+            if confidence_intention > confidence_intention_threshold:
                 selected_intention_sentence = ps_intention_sentence
+                selected_sampled_static_obj_dict = robot_sampled_static_obj_dict
             else:
                 selected_intention_sentence = gt_intention_sentence
+                selected_sampled_static_obj_dict = human_sampled_static_obj_dict
             robot_intentions_hist.append(f"{time_}: {selected_intention_sentence}")
             
-            robot_retrieved_predicates = retrieve_memory(f"Current time: {time_}. Intention: {selected_intention_sentence}", robot_predicates_hist, times, time_, predicates_num, decay_factor=0.95, top_k=5, retrieve_type="predicate")
+            # Robot Inferring Predicates
+            robot_retrieved_predicates = retrieve_memory(f"Current time: {time_}. Intention: {selected_intention_sentence}", robot_predicates_hist, times, time_, predicates_num, DEVICE, decay_factor=0.95, top_k=5, retrieve_type="predicate")
+            ps_robot_retrieved_predicates = retrieve_memory(f"Current time: {time_}. Intention: {ps_intention_sentence}", robot_predicates_hist, times, time_, predicates_num, DEVICE, decay_factor=0.95, top_k=5, retrieve_type="predicate")
 
-            robot_conversation_hist = predicates_discovery_gpt4(data_path, i, scene_id, [j, time_], [sampled_static_obj_dict, dynamic_obj_room_mapping], [robot_retrieved_intentions, robot_retrieved_predicates], inferred_traits, robot_conversation_hist, temperature_dict, model_dict, start_over=True)
+            robot_conversation_hist = predicates_discovery_gpt4(data_path, i, scene_id, [j, time_], [selected_sampled_static_obj_dict, dynamic_obj_room_mapping], [robot_retrieved_intentions, robot_retrieved_predicates], inferred_traits, robot_conversation_hist, temperature_dict, model_dict, start_over=True)
             robot_thoughts, robot_acts = extract_thoughts_and_acts(robot_conversation_hist[-1][1])
-            confidence_predicates = extract_confidences(robot_conversation_hist[-1][1])
 
+            _, data_tmp_traits = create_data([robot_thoughts, extract_inhand_obj_robot(robot_acts)], [None]*predicates_num, time_, inferred_traits, [robot_retrieved_intentions, robot_retrieved_predicates], data_type="predicates", cls_type="traits")
+            _, data_tmp_temporal = create_data([robot_thoughts, extract_inhand_obj_robot(robot_acts)], [None]*predicates_num, time_, inferred_traits, [robot_retrieved_intentions, robot_retrieved_predicates], data_type="predicates", cls_type="temporal")
+            if i == 0 and j == 0:
+                confidence_predicates_traits = test_model(data_tmp_traits, None, cls_type="traits", pretrained=False)
+                torch.cuda.empty_cache()
+                confidence_predicates_temporal = test_model(data_tmp_temporal, None, cls_type="temporal", pretrained=False)
+                torch.cuda.empty_cache()
+            elif i > 0 and j == 0:
+                confidence_predicates_traits = test_model(data_tmp_traits, prev_qlora_traits_predicates_dir, cls_type="traits", pretrained=True)
+                torch.cuda.empty_cache()
+                confidence_predicates_temporal = test_model(data_tmp_temporal, prev_qlora_temporal_predicates_dir, cls_type="temporal", pretrained=True)
+                torch.cuda.empty_cache()
+            else:
+                confidence_predicates_traits = test_model(data_tmp_traits, qlora_traits_predicates_dir, cls_type="traits", pretrained=True)
+                torch.cuda.empty_cache()
+                confidence_predicates_temporal = test_model(data_tmp_temporal, qlora_temporal_predicates_dir, cls_type="temporal", pretrained=True)
+                torch.cuda.empty_cache()
+            
+            confidence_predicates = [(0.7 * x + 0.3 * y) for x, y in zip(confidence_predicates_traits, confidence_predicates_temporal)]
             confidence_intention_hist.append(confidence_intention)
             confidence_predicates_hist.extend(confidence_predicates)
             confidence_intention_avg = calculate_confidence_avg(confidence_intention_hist)
             confidence_predicates_avg = calculate_confidence_avg(confidence_predicates_hist)
 
             for k, (robot_thought, confidence_predicate, human_thought) in enumerate(zip(robot_thoughts, confidence_predicates, human_thoughts)):
-                if confidence_predicate > 0.85:
+                if confidence_predicate > confidence_predicate_threshold:
                     robot_predicates_hist.append(f"{time_}.{k}: {robot_thought}")
                 else:
                     robot_predicates_hist.append(f"{time_}.{k}: {human_thought}")
 
-
+            # Robot Inferring Human Traits
             inferred_traits = traits_inference_gpt4(data_path, i, scene_id, [j, time_], [robot_intentions_hist, robot_predicates_hist], inferred_traits, temperature_dict, model_dict, start_over=True)[0][1]
             inferred_traits = extract_scores(inferred_traits)
             inferred_traits_hist.append(inferred_traits)
             _, big_five_mse = calculate_ocean_mse(big_five, inferred_traits_hist)
 
-            collaboration_approval = collaboration_approval_gpt4(data_path, i, scene_id, [j, time_], [gt_intention_sentence, ps_intention_sentence], human_thoughts, extract_inhand_obj_names(human_acts), robot_thoughts, robot_acts, temperature_dict, model_dict, start_over=True)[0][1]
+            # Judge Approving Collaborations
+            collaboration_approval = collaboration_approval_gpt4(data_path, i, scene_id, [j, time_], [gt_intention_sentence, ps_intention_sentence], human_thoughts, extract_inhand_obj_human(human_acts), robot_thoughts, robot_acts, temperature_dict, model_dict, start_over=True)[0][1]
             intention_approval, tasks_approval, _, _ = extract_collaboration(collaboration_approval)
             intention_approval_hist.append(intention_approval)
             tasks_approval_hist.extend(tasks_approval)
             intention_approval_score = calculate_accuracy(intention_approval_hist)
             tasks_approval_score = calculate_accuracy(tasks_approval_hist)
 
+            # Finetune with QLoRA
+            # Create intention training data
+            if confidence_intention > confidence_intention_threshold:
+                labels = 1 if intention_approval == "yes" else 0
+                add_data_train_traits_intention, _ = create_data(selected_intention_sentence, labels, time_, inferred_traits, [robot_retrieved_intentions, robot_retrieved_predicates], data_type="intention", cls_type="traits")
+                add_data_train_temporal_intention, _ = create_data(selected_intention_sentence, labels, time_, inferred_traits, [robot_retrieved_intentions, robot_retrieved_predicates], data_type="intention", cls_type="temporal")
+            else:
+                add_data_train_traits_intention, _ = create_data(selected_intention_sentence, 1, time_, inferred_traits, [robot_retrieved_intentions, robot_retrieved_predicates], data_type="intention", cls_type="traits")
+                add_data_train_temporal_intention, _ = create_data(selected_intention_sentence, 1, time_, inferred_traits, [robot_retrieved_intentions, robot_retrieved_predicates], data_type="intention", cls_type="temporal")
+                labels = 1 if intention_approval == "yes" else 0
+                add_data_train_traits_intention_1,_ = create_data(ps_intention_sentence, labels, time_, inferred_traits, [robot_retrieved_intentions, ps_robot_retrieved_predicates], data_type="intention", cls_type="traits")
+                add_data_train_temporal_intention_1, _ = create_data(ps_intention_sentence, labels, time_, inferred_traits, [robot_retrieved_intentions, ps_robot_retrieved_predicates], data_type="intention", cls_type="temporal")
+                
+                add_data_train_traits_intention.extend(add_data_train_traits_intention_1)
+                add_data_train_temporal_intention.extend(add_data_train_temporal_intention_1)
+
+            data_train_traits_intention.extend(add_data_train_traits_intention)
+            data_train_temporal_intention.extend(add_data_train_temporal_intention)
+
+            # Create predicates training data
+            labels = [] 
+            train_thoughts, train_acts, train_acts_1 = robot_thoughts, extract_inhand_obj_robot(robot_acts), []
+            for k in range(predicates_num):
+                label = 1 if tasks_approval[k] == "yes" else 0
+                labels.append(label)
+
+            for k, confidence_predicate in enumerate(confidence_predicates):
+                if confidence_predicate <= confidence_predicate_threshold:
+                    labels.append(1)
+                    train_thoughts.append(human_thoughts[k])
+                    train_acts_1.append(human_acts[k])
+            if train_acts_1: train_acts.extend(extract_inhand_obj_human(train_acts_1))
+            
+            add_data_train_traits_predicates, _ = create_data([train_thoughts, train_acts], labels, time_, inferred_traits, [robot_retrieved_intentions, robot_retrieved_predicates], data_type="predicates", cls_type="traits")
+            add_data_train_temporal_predicates, _ = create_data([train_thoughts, train_acts], labels, time_, inferred_traits, [robot_retrieved_intentions, robot_retrieved_predicates], data_type="predicates", cls_type="temporal")
+            data_train_traits_predicates.extend(add_data_train_traits_predicates)
+            data_train_temporal_predicates.extend(add_data_train_temporal_predicates)
+
+            # print()
+            # print(12345, data_train_traits_intention)
+            # print()
+            # print(12345, data_train_temporal_intention)
+            # print()
+            # print(12345, data_train_traits_predicates)
+            # print()
+            # print(12345, data_train_temporal_predicates)
+            # print()
+
+            # ts = time.time()
+            # time_string = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d-%H-%M-%S')
+            # qlora_traits_dir = os.path.join(data_path, f"qlora/traits/{str(i).zfill(5)}/{scene_id}/{time_string}_{time_}")
+            # qlora_temporal_dir = os.path.join(data_path, f"qlora/temporal/{str(i).zfill(5)}/{scene_id}/{time_string}_{time_}")
+            qlora_traits_intention_dir = os.path.join(data_path, f"qlora/traits/intention/{str(i).zfill(5)}/{scene_id}")
+            qlora_temporal_intention_dir = os.path.join(data_path, f"qlora/temporal/intention/{str(i).zfill(5)}/{scene_id}")
+            qlora_traits_predicates_dir = os.path.join(data_path, f"qlora/traits/predicates/{str(i).zfill(5)}/{scene_id}")
+            qlora_temporal_predicates_dir = os.path.join(data_path, f"qlora/temporal/predicates/{str(i).zfill(5)}/{scene_id}")
+            os.makedirs(qlora_traits_intention_dir, exist_ok=True)
+            os.makedirs(qlora_temporal_intention_dir, exist_ok=True)
+            os.makedirs(qlora_traits_predicates_dir, exist_ok=True)
+            os.makedirs(qlora_temporal_predicates_dir, exist_ok=True)
+
+            if i == 0:
+                train_model(1, data_train_traits_intention, data_train_traits_intention, qlora_traits_intention_dir, checkpoint_dir=None, pretrained=False)
+                torch.cuda.empty_cache()
+                train_model(1, data_train_temporal_intention, data_train_temporal_intention, qlora_temporal_intention_dir, checkpoint_dir=None, pretrained=False)
+                torch.cuda.empty_cache()
+                train_model(1, data_train_traits_predicates, data_train_traits_predicates, qlora_traits_predicates_dir, checkpoint_dir=None, pretrained=False)
+                torch.cuda.empty_cache()
+                train_model(1, data_train_temporal_predicates, data_train_temporal_predicates, qlora_temporal_predicates_dir, checkpoint_dir=None, pretrained=False)
+                torch.cuda.empty_cache()
+            else:
+                train_model(1, data_train_traits_intention, data_train_traits_intention, qlora_traits_intention_dir, checkpoint_dir=prev_qlora_traits_intention_dir, pretrained=True)
+                torch.cuda.empty_cache()
+                train_model(1, data_train_temporal_intention, data_train_temporal_intention, qlora_temporal_intention_dir, checkpoint_dir=prev_qlora_temporal_intention_dir, pretrained=True) 
+                torch.cuda.empty_cache()
+                train_model(1, data_train_traits_predicates, data_train_traits_predicates, qlora_traits_predicates_dir, checkpoint_dir=prev_qlora_traits_predicates_dir, pretrained=True)
+                torch.cuda.empty_cache()
+                train_model(1, data_train_temporal_predicates, data_train_temporal_predicates, qlora_temporal_predicates_dir, checkpoint_dir=prev_qlora_temporal_predicates_dir, pretrained=True) 
+                torch.cuda.empty_cache()
+
+            # Data Visualization
             for k in range(predicates_num):
                 if k == 0:
-                    csv_data.append([time_, gt_intention_sentence, ps_intention_sentence, confidence_intention, confidence_intention_avg, human_thoughts[k]+" "+ human_acts[k], robot_thoughts[k]+" "+ robot_acts[k], confidence_predicates[k], confidence_predicates_avg, profile_string, big_five, inferred_traits, big_five_mse, intention_approval, intention_approval_score, tasks_approval, tasks_approval_score])
+                    csv_data.append([time_, gt_intention_sentence, ps_intention_sentence, confidence_intention, (confidence_intention_traits, confidence_intention_temporal), confidence_intention_avg, human_thoughts[k]+" "+ human_acts[k], robot_thoughts[k]+" "+ robot_acts[k], confidence_predicates[k], (confidence_predicates_traits[k], confidence_predicates_temporal[k]), confidence_predicates_avg, profile_string, big_five, inferred_traits, big_five_mse, intention_approval, intention_approval_score, tasks_approval, tasks_approval_score])
                 else:
-                    csv_data.append(["", "", "", "", "", human_thoughts[k]+" "+ human_acts[k], robot_thoughts[k]+" "+ robot_acts[k], confidence_predicates[k], "", "", "", "", "", "", "", "", ""])
-            csv_data.append(["", "", "", "", "", "", "", "", "", ""])
+                    csv_data.append(["", "", "", "", "", "", human_thoughts[k]+" "+ human_acts[k], robot_thoughts[k]+" "+ robot_acts[k], confidence_predicates[k], (confidence_predicates_traits[k], confidence_predicates_temporal[k]), "", "", "", "", "", "", "", "", ""])
+            csv_data.append(["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""])
 
 
-        header = ["Time", "Human Intention", "Robot Intention", "Robot Intention Confidence", "Robot Intention Confidence Avg", "Human Predicate", "Robot Predicate", "Robot Predicate Confidence", "Robot Predicate Confidence Avg", "Human Traits", "Human Big 5", "Robot Big 5", "MSE", "Intention Approval", "Intention Approval Score", "Tasks Approval", "Tasks Approval Score"]
+        header = ["Time", "Human Intention", "Robot Intention", "Robot Intention Confidence", "Robot Intention Confidence Breakdown", "Robot Intention Confidence Avg", "Human Predicate", "Robot Predicate", "Robot Predicate Confidence", "Robot Predicate Confidence Breakdown", "Robot Predicate Confidence Avg", "Human Traits", "Human Big 5", "Robot Big 5", "MSE", "Intention Approval", "Intention Approval Score", "Tasks Approval", "Tasks Approval Score"]
         df = pd.DataFrame(csv_data, columns=header)
         with pd.ExcelWriter(vis_csv_path, engine='openpyxl', mode='w') as writer: 
             df.to_excel(writer, index=False, sheet_name='vis')
@@ -926,3 +1064,13 @@ if __name__ == "__main__":
                 column_length = max(df[column].astype(str).map(len).max(), len(column))
                 col_idx = df.columns.get_loc(column)
                 writer.sheets['vis'].column_dimensions[get_column_letter(col_idx+1)].width = column_length + 2
+
+        with open(vis_txt_path, 'w') as f:
+            f.write("data_train_traits_intention:\n")
+            f.write(str(data_train_traits_intention) + "\n\n")
+            f.write("data_train_temporal_intention:\n")
+            f.write(str(data_train_temporal_intention) + "\n\n")
+            f.write("data_train_traits_predicates:\n")
+            f.write(str(data_train_traits_predicates) + "\n\n")
+            f.write("data_train_temporal_predicates:\n")
+            f.write(str(data_train_temporal_predicates) + "\n\n")
