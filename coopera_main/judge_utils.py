@@ -1027,28 +1027,39 @@ def save_evaluation_results(eval_csv_path, eval_txt_path, eval_csv_data, data_tr
             "Robot Inferred Big-5", 
             "Big-5 Eval (Corr_latest, Corr_voting)", 
             "Intention LLM Approval", 
-            "Intention LLM Eval (Acc, F1 (macro, weighted, binary, avg))", 
+            "Intention LLM Eval (Acc, F1 (macro, weighted, binary))", 
             "Task LLM Approval", 
-            "Task LLM Eval (Acc, F1 (macro, weighted, binary, avg))", 
-            "Task Obj Category Approval", 
-            "Task Semantic Sim Eval (category, semantic_sim)"
+            "Task LLM Eval (Acc, F1 (macro, weighted, binary))", 
+            "Task Object Category Approval", 
+            "Task Object Category Eval (Acc, F1 (macro, weighted, binary)); Semantic Similarity"
         ]
     
     # Create DataFrame
     df = pd.DataFrame(eval_csv_data, columns=header)
     
     # Save to Excel with auto-width columns
-    mode = 'w' if not os.path.exists(eval_csv_path) else 'a'
-    
-    with pd.ExcelWriter(eval_csv_path, engine='openpyxl', mode=mode, if_sheet_exists='replace') as writer:
-        df.to_excel(writer, index=False, sheet_name=f'eval_{day}')
-        
-        # Auto-adjust column widths
-        worksheet = writer.sheets[f'eval_{day}']
-        for column in df:
-            column_length = max(df[column].astype(str).map(len).max(), len(column))
-            col_idx = df.columns.get_loc(column)
-            worksheet.column_dimensions[get_column_letter(col_idx + 1)].width = column_length + 2
+    if not os.path.exists(eval_csv_path):
+        # File doesn't exist, create new one
+        with pd.ExcelWriter(eval_csv_path, engine='openpyxl', mode='w') as writer:
+            df.to_excel(writer, index=False, sheet_name=f'eval_{day}')
+            
+            # Auto-adjust column widths
+            worksheet = writer.sheets[f'eval_{day}']
+            for column in df:
+                column_length = max(df[column].astype(str).map(len).max(), len(column))
+                col_idx = df.columns.get_loc(column)
+                worksheet.column_dimensions[get_column_letter(col_idx + 1)].width = column_length + 2
+    else:
+        # File exists, append with replace option
+        with pd.ExcelWriter(eval_csv_path, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
+            df.to_excel(writer, index=False, sheet_name=f'eval_{day}')
+            
+            # Auto-adjust column widths
+            worksheet = writer.sheets[f'eval_{day}']
+            for column in df:
+                column_length = max(df[column].astype(str).map(len).max(), len(column))
+                col_idx = df.columns.get_loc(column)
+                worksheet.column_dimensions[get_column_letter(col_idx + 1)].width = column_length + 2
     
     # Save training data to text file
     with open(eval_txt_path, 'w') as f:

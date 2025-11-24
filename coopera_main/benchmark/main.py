@@ -145,7 +145,7 @@ sentence_model = SentenceTransformer("all-MiniLM-L6-v2", device=DEVICE)
 
 
 # conda activate /hdd2/kai/Dynamic_Human_Robot_Value_Alignments/env
-# CUDA_VISIBLE_DEVICES="0,2,3" python coopera_main/benchmark/main.py --collab-type 2 --collab-setting 2 --start-logic-robot False --start-logic-lora False
+# CUDA_VISIBLE_DEVICES="0,2,3" python coopera_main/benchmark/main.py --collab-type 1 --collab-setting 4 --start-logic-robot True --start-logic-lora True
 # watch -n 1 nvidia-smi
 if __name__ == "__main__":
     data_path = os.path.join(dir_path, "data")
@@ -534,7 +534,7 @@ if __name__ == "__main__":
 
 
         # Robot Inferring Human Traits
-        fuzzy_traits = traits_inference_mllm(results_path, human_idx, scene_id, [day, 0, None], [robot_intentions_hist[human_idx][-13:], robot_predicates_hist[human_idx]], [inferred_profile[human_idx], inferred_traits[human_idx]], temperature_dict, model_dict, method="main", collab=collab_type, setting=collab_setting, gpt=use_gpt_robot, start_over=True)[0][1]
+        fuzzy_traits = traits_inference_mllm(results_path, human_idx, scene_id, [day, 0, None], [robot_intentions_hist[human_idx][-13:], robot_predicates_hist[human_idx]], [inferred_profile[human_idx], inferred_traits[human_idx]], temperature_dict, model_dict, method="main", collab=collab_type, setting=collab_setting, gpt=use_gpt_robot, start_over=start_logic_robot)[0][1]
         inferred_traits[human_idx], inferred_profile[human_idx] = extract_scores_and_profile(fuzzy_traits)
         inferred_traits_hist[human_idx].append(inferred_traits[human_idx])
         inferred_profile_hist[human_idx].append(inferred_profile[human_idx])
@@ -554,6 +554,6 @@ if __name__ == "__main__":
 
         # Finetune LLM with LoRA, except after the last day
         if day_counter < len(config['days']):
-            train_model(1, data_train_intentions, data_train_intentions, [day, time_], str(lora_intention_dir), data_type="intention", checkpoint_dir=None, pretrained=False)
-            train_model(1, data_train_predicates, data_train_predicates, [day, time_], str(lora_predicates_dir), data_type="predicates", checkpoint_dir=None, pretrained=False)
+            train_model(5, data_train_intentions, data_train_intentions, [day, time_], str(lora_intention_dir), data_type="intention", checkpoint_dir=None, pretrained=False)
+            train_model(5, data_train_predicates, data_train_predicates, [day, time_], str(lora_predicates_dir), data_type="predicates", checkpoint_dir=None, pretrained=False)
     
