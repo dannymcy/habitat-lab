@@ -12,8 +12,8 @@ def approve_predicate_prompt_1(time_, human_thoughts, human_acts, robot_thoughts
     contents = f"""
     Input:
     1.  Human intention: {human_thoughts[1]} at time: {time_}. 
-    1.  Three current human tasks: {human_thoughts[0]} at time: {time_}.
-    2.  Three robot-inferred tasks on enhancing comfort: {robot_thoughts}.
+    2.  Three current human tasks: {human_thoughts[0]} at time: {time_}.
+    3.  Three robot-inferred tasks on enhancing comfort: {robot_thoughts}.
 
     You are the human. Decide if the robot's assistance align with your needs.
     
