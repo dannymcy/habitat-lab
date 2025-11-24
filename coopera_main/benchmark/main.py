@@ -319,7 +319,7 @@ if __name__ == "__main__":
         # Setup evaluation paths per day
         eval_dir_per_human = pathlib.Path(results_path) / "benchmark" / f"collaboration_{collab_type}" / f"setting_{collab_setting}" / "main" / str(human_idx).zfill(5) / scene_id
         eval_csv_data = []
-        eval_txt_path = eval_dir_per_human / f"train_data_day_{day_idx}.txt"
+        eval_txt_path = eval_dir_per_human / f"train_data_human_{human_idx}_day_{day_idx}.txt"
         os.makedirs(eval_dir_per_human, exist_ok=True)
 
         answer_intentions_within_day, answer_predicates_within_day = [], []
