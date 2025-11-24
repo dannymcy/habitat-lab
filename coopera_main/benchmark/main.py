@@ -387,7 +387,7 @@ if __name__ == "__main__":
             robot_conversation_hist = intention_discovery_mllm(results_path, human_idx, scene_id, [day, j, time_], [os.path.join(video_dir, "robot_scene_camera_rgb_video"), os.path.join(video_dir, "human_third_rgb_video")], [robot_retrieved_intentions, robot_retrieved_predicates, human_thoughts[0]], [inferred_profile[human_idx], inferred_traits[human_idx]], temperature_dict, model_dict, method="main", collab=collab_type, setting=collab_setting, gpt=use_gpt_robot, start_over=start_logic_robot)
             _, pred_intention_sentence_list, robot_sampled_static_obj_dict_list = sample_obj_by_similarity(robot_conversation_hist, static_obj_room_mapping, sentence_model, top_k=30)
         
-            _, data_test = create_data(pred_intention_sentence_list, [None]*intentions_num, time_, [inferred_profile[human_idx], inferred_traits[human_idx]], [robot_retrieved_intentions, robot_retrieved_predicates], data_type="intention")
+            _, data_test = create_data(pred_intention_sentence_list, [None]*intentions_num, time_, [inferred_profile[human_idx], inferred_traits[human_idx]], [robot_retrieved_intentions, robot_retrieved_predicates], data_type="intention", collab=collab_type)
 
             if start_logic_lora:
                 if day_counter == 0:
@@ -417,7 +417,7 @@ if __name__ == "__main__":
                 robot_thoughts.extend(robot_thoughts_batch)
                 robot_acts.extend(robot_acts_batch)
 
-                _, data_test_batch = create_data([None, robot_thoughts_batch, extract_inhand_obj_robot(robot_acts_batch)], [None]*predicates_num, time_, [inferred_profile[human_idx], inferred_traits[human_idx]], [robot_retrieved_intentions, robot_retrieved_predicates], data_type="predicates")
+                _, data_test_batch = create_data([None, robot_thoughts_batch, extract_inhand_obj_robot(robot_acts_batch, collab=collab_type)], [None]*predicates_num, time_, [inferred_profile[human_idx], inferred_traits[human_idx]], [robot_retrieved_intentions, robot_retrieved_predicates], data_type="predicates", collab=collab_type)
                 data_test.extend(data_test_batch)
 
             if start_logic_lora:
@@ -433,16 +433,16 @@ if __name__ == "__main__":
             # Discussion Period: Human Judge Approving Collaborations
             intentions_approval_res = intention_approval_mllm(results_path, human_idx, scene_id, [day, j, time_], [gt_intention_sentence, pred_intention_sentence_list], temperature_dict, model_dict, method="main", collab=collab_type, setting=collab_setting, start_over=start_logic_robot)[0][1]
             intentions_approval, _ = extract_intention_approval(intentions_approval_res)
-
+            
             predicates_approval = []
             for k, _ in enumerate(selected_intention_sentence_list):
-                predicates_approval_res = predicate_approval_mllm(results_path, human_idx, scene_id, [day, file_idx+k, time_], human_thoughts, extract_inhand_obj_human(human_acts), robot_thoughts[k*predicates_num:(k+1)*predicates_num], extract_inhand_obj_robot(robot_acts[k*predicates_num:(k+1)*predicates_num]), temperature_dict, model_dict, method="main", collab=collab_type, setting=collab_setting, start_over=start_logic_robot)[0][1]
+                predicates_approval_res = predicate_approval_mllm(results_path, human_idx, scene_id, [day, file_idx+k, time_], human_thoughts, extract_inhand_obj_human(human_acts, collab=collab_type), robot_thoughts[k*predicates_num:(k+1)*predicates_num], extract_inhand_obj_robot(robot_acts[k*predicates_num:(k+1)*predicates_num], collab=collab_type), temperature_dict, model_dict, method="main", collab=collab_type, setting=collab_setting, start_over=start_logic_robot)[0][1]
                 predicates_approval_batch, _ = extract_predicate_approval(predicates_approval_res)
                 predicates_approval.extend(predicates_approval_batch)
 
             category_approval = []
             for k, _ in enumerate(selected_intention_sentence_list):
-                category_approval_res = category_approval_mllm(results_path, human_idx, scene_id, [day, file_idx+k, time_], human_thoughts, extract_inhand_obj_human(human_acts), robot_thoughts[k*predicates_num:(k+1)*predicates_num], extract_inhand_obj_robot(robot_acts[k*predicates_num:(k+1)*predicates_num]), temperature_dict, model_dict, method="main", collab=collab_type, setting=collab_setting, start_over=start_logic_robot)[0][1]
+                category_approval_res = category_approval_mllm(results_path, human_idx, scene_id, [day, file_idx+k, time_], human_thoughts, extract_inhand_obj_human(human_acts, collab=collab_type), robot_thoughts[k*predicates_num:(k+1)*predicates_num], extract_inhand_obj_robot(robot_acts[k*predicates_num:(k+1)*predicates_num], collab=collab_type), temperature_dict, model_dict, method="main", collab=collab_type, setting=collab_setting, start_over=start_logic_robot)[0][1]
                 category_approval_batch, _ = extract_predicate_approval(category_approval_res)
                 category_approval.extend(category_approval_batch)
 
@@ -461,8 +461,8 @@ if __name__ == "__main__":
                 labels.append(label)
             labels_intentions_llm_within_day.extend(labels)
 
-            data_train_intentions_batch_1, _ = create_data(pred_intention_sentence_list, labels, time_, [inferred_profile[human_idx], inferred_traits[human_idx]], [robot_retrieved_intentions, robot_retrieved_predicates_gt], data_type="intention")
-            data_train_intentions_batch_2, _ = create_data([gt_intention_sentence], ["Yes"], time_, [inferred_profile[human_idx], inferred_traits[human_idx]], [robot_retrieved_intentions, robot_retrieved_predicates_gt], data_type="intention")
+            data_train_intentions_batch_1, _ = create_data(pred_intention_sentence_list, labels, time_, [inferred_profile[human_idx], inferred_traits[human_idx]], [robot_retrieved_intentions, robot_retrieved_predicates_gt], data_type="intention", collab=collab_type)
+            data_train_intentions_batch_2, _ = create_data([gt_intention_sentence], ["Yes"], time_, [inferred_profile[human_idx], inferred_traits[human_idx]], [robot_retrieved_intentions, robot_retrieved_predicates_gt], data_type="intention", collab=collab_type)
             data_train_intentions_batch_1.extend(data_train_intentions_batch_2)
             data_train_intentions.extend(data_train_intentions_batch_1)
 
@@ -477,7 +477,7 @@ if __name__ == "__main__":
                 train_thoughts.append(robot_thoughts[k])
                 train_acts.append(robot_acts[k])
                 labels.append(label)
-            train_acts = extract_inhand_obj_robot(train_acts)
+            train_acts = extract_inhand_obj_robot(train_acts, collab=collab_type)
 
             # Add human predicates training data harms the performance
             # train_acts_batch = []
@@ -485,9 +485,9 @@ if __name__ == "__main__":
             #     labels.append("Yes")
             #     train_thoughts.append(human_thoughts[k])
             #     train_acts_batch.append(human_acts[k])
-            # train_acts.extend(extract_inhand_obj_human(train_acts_batch))
+            # train_acts.extend(extract_inhand_obj_human(train_acts_batch, collab=collab_type))
             
-            data_train_predicate_batch, _ = create_data([None, train_thoughts, train_acts], labels, time_, [inferred_profile[human_idx], inferred_traits[human_idx]], [robot_retrieved_intentions, robot_retrieved_predicates_gt], data_type="predicates")
+            data_train_predicate_batch, _ = create_data([None, train_thoughts, train_acts], labels, time_, [inferred_profile[human_idx], inferred_traits[human_idx]], [robot_retrieved_intentions, robot_retrieved_predicates_gt], data_type="predicates", collab=collab_type)
             data_train_predicates.extend(data_train_predicate_batch)
 
             lora_intention_dir = pathlib.Path(results_path) / "lora_models" / f"collaboration_{collab_type}" / f"setting_{collab_setting}" / "main" / "intention" / str(human_idx).zfill(5) / scene_id / day
@@ -503,11 +503,11 @@ if __name__ == "__main__":
             for k in range(predicates_num * len(selected_intention_sentence_list)):
                 if answer_predicates[k].lower() == "yes":
                     pred_objs.append(robot_acts[k])
-            pred_objs = extract_inhand_obj_robot(pred_objs)
+            pred_objs = extract_inhand_obj_robot(pred_objs, collab=collab_type)
 
             for k in range(predicates_num):
                 gt_objs.append(human_acts[k])
-            gt_objs = extract_inhand_obj_human(gt_objs)
+            gt_objs = extract_inhand_obj_human(gt_objs, collab=collab_type)
 
             semantic_sim.append(calculate_semantic_similarity(gt_objs, pred_objs))
             avg_semantic_sim = sum(semantic_sim) / len(semantic_sim) if semantic_sim else 0

@@ -327,46 +327,109 @@ def extract_predicate_approval(text):
     return tasks, reasons_tasks
 
 
-def extract_inhand_obj_human(objects_list):
+def extract_inhand_obj_human(objects_list, collab=2):
     """
     Extract the inhand_obj_name from each item in the list of object descriptions.
+    For collab=1: Extract static and dynamic object names and format as action phrase
+    For collab=2: Extract inhand_obj_name
     """
-    inhand_obj_names = []
+    if collab == 2:
+        inhand_obj_names = []
+        for obj in objects_list:
+            # Find the substring that starts with 'inhand_obj_name:' and extract its value
+            start_index = obj.find("inhand_obj_name:") + len("inhand_obj_name:")
+            end_index = obj.find(",", start_index)
+            if end_index == -1:  # Handle the case where inhand_obj_name is at the end
+                end_index = obj.find("]", start_index)
+            inhand_obj_name = obj[start_index:end_index].strip()
+            inhand_obj_names.append(inhand_obj_name)
+        return inhand_obj_names
     
-    for obj in objects_list:
-        # Find the substring that starts with 'inhand_obj_name:' and extract its value
-        start_index = obj.find("inhand_obj_name:") + len("inhand_obj_name:")
-        end_index = obj.find(",", start_index)
-        if end_index == -1:  # Handle the case where inhand_obj_name is at the end
-            end_index = obj.find("]", start_index)
-        inhand_obj_name = obj[start_index:end_index].strip()
-        inhand_obj_names.append(inhand_obj_name)
-    
-    return inhand_obj_names
-
-
-def extract_inhand_obj_robot(input_list):
-    values = []
-    for item in input_list:
-        if '[' in item and ']' in item:
-            # Remove the outer square brackets
-            stripped_item = item.strip('[]').strip()
+    elif collab == 1:
+        action_phrases = []
+        for obj in objects_list:
+            # Extract static_obj_name
+            static_start = obj.find("static_obj_name:")
+            static_obj_name = ""
+            if static_start != -1:
+                static_start += len("static_obj_name:")
+                static_end = obj.find(",", static_start)
+                if static_end == -1:
+                    static_end = obj.find("]", static_start)
+                static_obj_name = obj[static_start:static_end].strip().strip("'\"")
             
-            # Attempt to split by ": "
-            if ': ' in stripped_item:
-                parts = stripped_item.split(': ', 1)
+            # Extract dynamic_obj_name
+            dynamic_start = obj.find("dynamic_obj_name:")
+            dynamic_obj_name = ""
+            if dynamic_start != -1:
+                dynamic_start += len("dynamic_obj_name:")
+                dynamic_end = obj.find("'", dynamic_start + 2) if obj[dynamic_start:dynamic_start+2] == " '" else obj.find("]", dynamic_start)
+                if dynamic_end == -1:
+                    dynamic_end = len(obj)
+                dynamic_obj_name = obj[dynamic_start:dynamic_end].strip().strip("'\"")
+            
+            # Format as action phrase
+            if static_obj_name and dynamic_obj_name:
+                action_phrases.append(f"pick {dynamic_obj_name} and place on {static_obj_name}")
+        return action_phrases
+
+
+def extract_inhand_obj_robot(input_list, collab=2):
+    """
+    Extract objects from robot action list.
+    For collab=1: Extract static and dynamic object names and format as action phrase
+    For collab=2: Extract the value after the colon
+    """
+    if collab == 2:
+        values = []
+        for item in input_list:
+            if '[' in item and ']' in item:
+                # Remove the outer square brackets
+                stripped_item = item.strip('[]').strip()
                 
-                # If we have at least two parts, use the second
-                if len(parts) > 1:
-                    values.append(parts[1].strip())
+                # Attempt to split by ": "
+                if ': ' in stripped_item:
+                    parts = stripped_item.split(': ', 1)
+                    
+                    # If we have at least two parts, use the second
+                    if len(parts) > 1:
+                        values.append(parts[1].strip())
+                    else:
+                        # Fallback: just use everything inside the brackets
+                        values.append(stripped_item)
                 else:
-                    # Fallback: just use everything inside the brackets
+                    # No ": " found, just use everything inside the brackets
                     values.append(stripped_item)
             else:
-                # No ": " found, just use everything inside the brackets
-                values.append(stripped_item)
-        else:
-            # No square brackets found, use the item as is
-            values.append(item)
+                # No square brackets found, use the item as is
+                values.append(item)
+        return values
+    
+    elif collab == 1:
+        action_phrases = []
+        for obj in input_list:  # Changed from objects_list to input_list
+            # Extract static_obj_name
+            static_start = obj.find("static_obj_name:")
+            static_obj_name = ""
+            if static_start != -1:
+                static_start += len("static_obj_name:")
+                static_end = obj.find(",", static_start)
+                if static_end == -1:
+                    static_end = obj.find("]", static_start)
+                static_obj_name = obj[static_start:static_end].strip().strip("'\"")
             
-    return values
+            # Extract dynamic_obj_name
+            dynamic_start = obj.find("dynamic_obj_name:")
+            dynamic_obj_name = ""
+            if dynamic_start != -1:
+                dynamic_start += len("dynamic_obj_name:")
+                dynamic_end = obj.find("'", dynamic_start + 2) if obj[dynamic_start:dynamic_start+2] == " '" else obj.find("]", dynamic_start)
+                if dynamic_end == -1:
+                    dynamic_end = len(obj)
+                dynamic_obj_name = obj[dynamic_start:dynamic_end].strip().strip("'\"")
+            
+            # Format as action phrase
+            if static_obj_name and dynamic_obj_name:
+                action_phrases.append(f"pick {dynamic_obj_name} and place on {static_obj_name}")
+            
+        return action_phrases
