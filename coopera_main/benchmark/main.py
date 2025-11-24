@@ -273,6 +273,11 @@ if __name__ == "__main__":
     eval_big_five_across_days_latest, eval_big_five_across_days_voting = "", ""
     eval_intentions_llm_across_days, eval_predicates_llm_across_days, eval_predicates_semantic_across_days = [], [], []
 
+    # Setup evaluation paths across days
+    eval_dir = pathlib.Path(results_path) / "benchmark" / f"collaboration_{collab_type}" / f"setting_{collab_setting}" / "main"
+    eval_csv_path = eval_dir / "eval.xlsx"
+    eval_json_path = eval_dir / "eval.json"
+    os.makedirs(eval_dir, exist_ok=True)
 
     day_counter = 0
     for day_idx, scene_idx, human_idx in zip(config['days'], config['scenes'], config['humans']):
@@ -311,13 +316,11 @@ if __name__ == "__main__":
 
         profile_string = traits_summary_mllm(results_path, human_idx, scene_id, [profile_string, big_five], temperature_dict, model_dict, gpt=use_gpt_human, start_over=False)[0][1]
 
-        # Setup evaluation paths for this iteration
-        eval_dir = pathlib.Path(results_path) / "benchmark" / f"collaboration_{collab_type}" / f"setting_{collab_setting}" / "main" / str(human_idx).zfill(5) / scene_id
-        eval_csv_path = eval_dir / "eval.xlsx"
-        eval_txt_path = eval_dir / f"eval_day_{day}.txt"
-        eval_json_path = eval_dir / "eval.json"
+        # Setup evaluation paths per day
+        eval_dir_per_human = pathlib.Path(results_path) / "benchmark" / f"collaboration_{collab_type}" / f"setting_{collab_setting}" / "main" / str(human_idx).zfill(5) / scene_id
         eval_csv_data = []
-        os.makedirs(eval_dir, exist_ok=True)
+        eval_txt_path = eval_dir / f"train_data_day_{day_counter}.txt"
+        os.makedirs(eval_dir_per_human, exist_ok=True)
 
         answer_intentions_within_day, answer_predicates_within_day = [], []
         labels_intentions_llm_within_day, labels_predicates_llm_within_day, labels_predicates_category_within_day = [], [], []
@@ -394,9 +397,9 @@ if __name__ == "__main__":
                     answer_intentions = test_model(data_test, None, data_type="intention", pretrained=False)
                 else:
                     answer_intentions = test_model(data_test, prev_lora_intention_dir, data_type="intention", pretrained=True)
-                save_answers(answer_intentions, eval_dir, f"{human_idx}_{day_idx}_{j}_intention.txt")
+                save_answers(answer_intentions, eval_dir_per_human, f"{human_idx}_{day_idx}_{j}_intention.txt")
             else:
-                answer_intentions = load_answers(eval_dir, f"{human_idx}_{day_idx}_{j}_intention.txt")
+                answer_intentions = load_answers(eval_dir_per_human, f"{human_idx}_{day_idx}_{j}_intention.txt")
             answer_intentions_within_day.extend(answer_intentions)
 
             # Robot gets the intention with "Yes" answer
@@ -425,9 +428,9 @@ if __name__ == "__main__":
                     answer_predicates = test_model(data_test, None, data_type="predicates", pretrained=False)
                 else:
                     answer_predicates = test_model(data_test, prev_lora_predicates_dir, data_type="predicates", pretrained=True)
-                save_answers(answer_predicates, eval_dir, f"{human_idx}_{day_idx}_{j}_predicate.txt")
+                save_answers(answer_predicates, eval_dir_per_human, f"{human_idx}_{day_idx}_{j}_predicate.txt")
             else:
-                answer_predicates = load_answers(eval_dir, f"{human_idx}_{day_idx}_{j}_predicate.txt")
+                answer_predicates = load_answers(eval_dir_per_human, f"{human_idx}_{day_idx}_{j}_predicate.txt")
             answer_predicates_within_day.extend(answer_predicates)
 
             # Discussion Period: Human Judge Approving Collaborations
@@ -545,7 +548,7 @@ if __name__ == "__main__":
         data_train_intentions, data_train_predicates = update_data_with_traits(data_train_intentions, data_train_predicates, [inferred_profile[human_idx], inferred_traits[human_idx]])
 
         # Data Visualization
-        save_evaluation_results(eval_csv_path, eval_txt_path, eval_csv_data, data_train_intentions, data_train_predicates, day, method="main")
+        save_evaluation_results(eval_csv_path, eval_txt_path, eval_csv_data, data_train_intentions, data_train_predicates, str(day_counter), method="main")
         save_results(eval_json_path, eval_intentions_llm_across_days, eval_predicates_llm_across_days, eval_predicates_semantic_across_days)
         
         # End the current environment of the scene instance
