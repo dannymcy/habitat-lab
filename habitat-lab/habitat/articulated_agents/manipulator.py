@@ -244,15 +244,102 @@ class Manipulator(ArticulatedAgentInterface):
         self.sim_obj.joint_positions = joint_state
         return self.ee_transform(ee_index).translation
 
+    # def calculate_ee_inverse_kinematics(
+    #     self, ee_target_position: np.ndarray, ee_index: int = 0
+    # ) -> np.ndarray:
+    #     """Gets the joint states necessary to achieve the desired end-effector
+    #     configuration.
+    #     """
+    #     raise NotImplementedError(
+    #         "Currently no implementation for generic IK."
+    #     )
+
     def calculate_ee_inverse_kinematics(
         self, ee_target_position: np.ndarray, ee_index: int = 0
     ) -> np.ndarray:
-        """Gets the joint states necessary to achieve the desired end-effector
-        configuration.
         """
-        raise NotImplementedError(
-            "Currently no implementation for generic IK."
-        )
+        Numerically computes the joint positions required to reach the desired end-effector position.
+
+        :param ee_target_position: The desired 3D position of the end-effector.
+        :param ee_index: Index of the end-effector (useful if the manipulator has multiple EEs).
+        :return: Joint positions that attempt to achieve the desired EE position.
+        """
+        max_iterations = 100
+        threshold = 1e-3
+        learning_rate = 0.1
+
+        # Initialize joint positions
+        joint_positions = self.arm_joint_pos.copy()
+
+        for iteration in range(max_iterations):
+            # Forward kinematics: get current EE position
+            self.arm_joint_pos = joint_positions
+            current_ee_transform = self.ee_transform(ee_index)
+            current_ee_pos = current_ee_transform.translation
+
+            # Compute position error
+            position_error = ee_target_position - current_ee_pos
+            error_norm = np.linalg.norm(position_error)
+
+            if error_norm < threshold:
+                # Desired position reached
+                print(f"IK converged in {iteration} iterations.")
+                break
+
+            # Compute Jacobian
+            jacobian = self.compute_numerical_jacobian(joint_positions, ee_index)
+
+            # Compute joint updates using the Jacobian pseudoinverse
+            jacobian_pinv = np.linalg.pinv(jacobian)
+
+            delta_joint_positions = learning_rate * jacobian_pinv @ position_error
+
+            # Update joint positions
+            joint_positions += delta_joint_positions
+
+            # Enforce joint limits
+            lower_limits, upper_limits = self.arm_joint_limits
+            joint_positions = np.clip(joint_positions, lower_limits, upper_limits)
+        else:
+            print("IK did not converge within the maximum number of iterations.")
+
+        return joint_positions
+
+    def compute_numerical_jacobian(self, joint_positions: np.ndarray, ee_index: int = 0) -> np.ndarray:
+        """
+        Numerically computes the Jacobian matrix of the manipulator.
+
+        :param joint_positions: Current joint positions.
+        :param ee_index: Index of the end-effector.
+        :return: The Jacobian matrix (3 x N_joints).
+        """
+        num_joints = len(joint_positions)
+        jacobian = np.zeros((3, num_joints))
+        delta = 1e-6  # Small change for numerical differentiation
+
+        # Store original joint positions
+        original_joint_positions = joint_positions.copy()
+
+        # Compute current EE position
+        self.arm_joint_pos = original_joint_positions
+        current_ee_pos = self.ee_transform(ee_index).translation
+
+        for i in range(num_joints):
+            # Perturb joint i
+            perturbed_joint_positions = original_joint_positions.copy()
+            perturbed_joint_positions[i] += delta
+
+            # Compute perturbed EE position
+            self.arm_joint_pos = perturbed_joint_positions
+            perturbed_ee_pos = self.ee_transform(ee_index).translation
+
+            # Compute numerical derivative
+            jacobian[:, i] = (perturbed_ee_pos - current_ee_pos) / delta
+
+        # Restore original joint positions
+        self.arm_joint_pos = original_joint_positions
+
+        return jacobian
 
     def ee_transform(self, ee_index: int = 0) -> mn.Matrix4:
         """Gets the transformation of the end-effector location. This is offset

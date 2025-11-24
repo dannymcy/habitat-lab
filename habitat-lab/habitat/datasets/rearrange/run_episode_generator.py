@@ -300,11 +300,7 @@ def get_arg_parser():
     parser.add_argument(
         "--out",
         type=str,
-<<<<<<< HEAD
         default="data/hab3_bench_assets/episode_datasets/scene_id.json.gz",
-=======
-        default=None,
->>>>>>> upstream/main
         help="Relative path to output generated RearrangeEpisodeDataset.",
     )
 

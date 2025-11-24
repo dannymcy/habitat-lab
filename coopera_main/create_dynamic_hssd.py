@@ -24,6 +24,9 @@ def get_scene_files(directory):
 
 
 
+# conda activate /hdd2/kai/Dynamic_Human_Robot_Value_Alignments/env
+# CUDA_VISIBLE_DEVICES="0,1,3" python coopera_main/create_dynamic_hssd.py
+# watch -n 1 nvidia-smi
 if __name__ == "__main__":
     # Load the CSV file
     csv_file_path = 'data/scene_datasets/hssd-hab/semantics/objects.csv'
@@ -35,17 +38,15 @@ if __name__ == "__main__":
     print(unique_super_categories)
     print()
     
-    # dynamic_categories = ['trashcan', 'decor', 'lighting', 'seating_furniture', 'dining_ware', 'plant', 'electronics'
-    #                       'animate_object', 'apparel', 'liquid_container', 'kitchen_ware', 'tray',
-    #                       'small_kitchen_appliance', 'bathroom_accessory', 'gym_equipment', 'toy', 'wearable']
-    # dynamic_categories = ['trashcan', 'decor', 'lighting', 'dining_ware', 'plant', 'electronics',
-    #                       'animate_object', 'apparel', 'liquid_container', 'kitchen_ware', 'tray',
-    #                       'small_kitchen_appliance', 'bathroom_accessory', 'gym_equipment', 'toy', 'wearable']
-    dynamic_categories = []
-    static_categories = ["storage_furniture", "support_furniture", "seating_furniture", "floor_covering", 
+    dynamic_categories = ['trashcan', 'decor', 'dining_ware', 'plant', 'electronics', 
+                          'animate_object', 'apparel', 'liquid_container', 'kitchen_ware', 'tray',
+                          'bathroom_accessory', 'gym_equipment', 'toy', 'wearable']
+    # dynamic_categories = []
+    static_categories = ["storage_furniture", "support_furniture", "seating_furniture", "floor_covering", 'lighting',
                          "sleeping_furniture", "bathroom_fixtures", "mirror",
                          "large_kitchen_appliance", "large_appliance", "kitchen_bathroom_fixture", 
-                         "vehicle", "heating_cooling", "medium_kitchen_appliance", "display"]
+                         "vehicle", "heating_cooling", "medium_kitchen_appliance", "display", "arch", "curtain",
+                         "small_kitchen_appliance"]
 
     # List of objects to make dynamic by their IDs
     # TODO: NaN is an important categort, containing many objects. Need to resolve this.
@@ -58,8 +59,12 @@ if __name__ == "__main__":
         (objects_df['super_category'].isin(dynamic_categories))
     ]['id'].tolist()
 
-    scene_dir = 'data/hab3_bench_assets/hab3-hssd/scenes_all_static'
-    output_dir = 'data/hab3_bench_assets/hab3-hssd/scenes'
+    # scene_dir = 'data/hab3_bench_assets/hab3-hssd/scenes_all_static'
+    # output_dir = 'data/hab3_bench_assets/hab3-hssd/scenes'
+    scene_dir = 'data/scene_datasets/hssd-hab/scenes'
+    output_dir = 'data/scene_datasets/hssd-hab/scenes_dynamic'
+    os.makedirs(output_dir, exist_ok=True)
+
     scene_files_list, scene_full_list = get_scene_files(scene_dir)
 
     for i, scene_file in enumerate(scene_full_list):

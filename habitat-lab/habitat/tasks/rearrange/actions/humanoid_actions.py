@@ -333,6 +333,7 @@ class HumanoidPlaceObjIdAction(HumanoidPickAction):
 
         self.dist_move_per_step = config.dist_move_per_step
         self.dist_to_snap = config.dist_to_snap
+        # self.dist_to_snap = 0
 
         self._init_coord = mn.Vector3(
             0.2, 0.2, 0
@@ -397,8 +398,8 @@ class HumanoidPlaceObjIdAction(HumanoidPickAction):
                 )
                 dist_hand_obj = np.linalg.norm(object_coord - new_hand_coord)
  
-                # if dist_hand_obj < self.dist_to_snap:
-                if True:  # always desnap
+                if dist_hand_obj < self.dist_to_snap:
+                # if True:  # always desnap
                     # desnap
                     self.hand_state = HandState.RETRACTING
                     self.cur_grasp_mgr.desnap(True)

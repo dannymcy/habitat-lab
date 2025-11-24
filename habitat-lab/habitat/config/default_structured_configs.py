@@ -314,7 +314,7 @@ class HumanoidPickActionConfig(ActionConfig):
     # The amount we should move on every call to humanoid pick action
     dist_move_per_step: float = 0.04
     # The distance at which we will snap/desnap an object, and start retracting the hand
-    dist_to_snap: float = 0.02
+    dist_to_snap: float = 0.1  # 0.02
 
 
 @dataclass
@@ -1656,10 +1656,36 @@ class ThirdRGBSensorConfig(HabitatSimRGBSensorConfig):
 @dataclass
 class TopRGBSensorConfig(HabitatSimRGBSensorConfig):
     uuid: str = "top_rgb"
-    width: int = 512
-    height: int = 384
-    position: List[float] = field(default_factory=lambda: [3.3, 8.0, 2.8])
-    orientation: List[float] = field(default_factory=lambda: [-1.57, 1.57, 0.0])
+    width: int = 1024
+    height: int = 768
+
+    # Below is the camera locations to perfectly capture each scene from top down angle
+
+    # "108736635_177263256"
+    # position: List[float] = field(default_factory=lambda: [-10, 17.0, 2.8])
+    # orientation: List[float] = field(default_factory=lambda: [-1.57, -1.57, 0.3])
+
+    # position: first translate up or down, second zoom in or out, third translate left or right
+    # orientation: first vertical flip, second rotate clockwise/counter-clockwise, third horizontal flip
+
+    # "103997919_171031233" 
+    # position: List[float] = field(default_factory=lambda: [3.3, 8.0, 2.8])
+    # orientation: List[float] = field(default_factory=lambda: [-1.57, 1.57, 0.0])
+    # position: List[float] = field(default_factory=lambda: [3.3, 13.0, 2.8])
+    # orientation: List[float] = field(default_factory=lambda: [-1.57, 1.57, -0.3])
+
+    # "105515211_173104179"
+    # position: List[float] = field(default_factory=lambda: [-10, 17.0, 2.8])
+    # orientation: List[float] = field(default_factory=lambda: [-1.57, -1.57, 0.7])
+
+    # "108736872_177263607"
+    # position: List[float] = field(default_factory=lambda: [3.3, 20.0, 6.8])
+    # orientation: List[float] = field(default_factory=lambda: [-1.57, 1.57, -0.3])
+
+    # "102344049"
+    position: List[float] = field(default_factory=lambda: [3.3, 33.0, 2.8])
+    orientation: List[float] = field(default_factory=lambda: [-1.57, 1.57, -0.3])
+
 
 @dataclass
 class ThirdDepthSensorConfig(HabitatSimDepthSensorConfig):

@@ -74,69 +74,69 @@ from sentence_transformers import SentenceTransformer
 
 
 
+# Deprecated
+# def read_human_data_okcupid(data_path):
+#     csv_file_path = os.path.join(data_path, "humanoids/humanoid_data/okcupid_profiles.csv")
+#     okcupid_data = pd.read_csv(csv_file_path)
+#     profiles = okcupid_data[['age', 'sex', 'orientation', 'body_type', 'diet', 'drinks', 'education', 'ethnicity', 'height', 'job', 'location', 'offspring', 'pets', 'religion', 'smokes', 'essay0', 'essay1', 'essay2', 'essay3', 'essay4', 'essay5', 'essay6','essay7', 'essay8', 'essay9']]
 
-def read_human_data_okcupid(data_path):
-    csv_file_path = os.path.join(data_path, "humanoids/humanoid_data/okcupid_profiles.csv")
-    okcupid_data = pd.read_csv(csv_file_path)
-    profiles = okcupid_data[['age', 'sex', 'orientation', 'body_type', 'diet', 'drinks', 'education', 'ethnicity', 'height', 'job', 'location', 'offspring', 'pets', 'religion', 'smokes', 'essay0', 'essay1', 'essay2', 'essay3', 'essay4', 'essay5', 'essay6','essay7', 'essay8', 'essay9']]
+#     profile_string_complete_list = []
+#     profile_string_partial_list = []
 
-    profile_string_complete_list = []
-    profile_string_partial_list = []
+#     for i in range(min(100, len(profiles))):
+#         selected_profile = profiles.iloc[i]
 
-    for i in range(min(100, len(profiles))):
-        selected_profile = profiles.iloc[i]
+#         # Create a one-paragraph string
+#         profile_string_complete = (
+#             f"Age: {selected_profile['age']}; "
+#             f"Sex: {selected_profile['sex']}; "
+#             f"Orientation: {selected_profile['orientation']}; "
+#             f"Body Type: {selected_profile['body_type']}; "
+#             f"Diet: {selected_profile['diet']}; "
+#             f"Drinks: {selected_profile['drinks']}; "
+#             f"Education: {selected_profile['education']}; "
+#             f"Ethnicity: {selected_profile['ethnicity']}; "
+#             f"Height: {selected_profile['height']}; "
+#             f"Job: {selected_profile['job']}; "
+#             f"Location: {selected_profile['location']}; "
+#             f"Offspring: {selected_profile['offspring']}; "
+#             f"Pets: {selected_profile['pets']}; "
+#             f"Religion: {selected_profile['religion']}; "
+#             f"Smokes: {selected_profile['smokes']}; "
+#             f"Intro 1: {selected_profile['essay0']}; "
+#             f"Intro 2: {selected_profile['essay1']}; "
+#             f"Intro 3: {selected_profile['essay2']}; "
+#             f"Intro 4: {selected_profile['essay3']}; "
+#             f"Intro 5: {selected_profile['essay4']}; "
+#             f"Intro 6: {selected_profile['essay5']}; "
+#             f"Intro 7: {selected_profile['essay6']}; "
+#             f"Intro 8: {selected_profile['essay7']}; "
+#             f"Intro 9: {selected_profile['essay8']}; "    
+#             f"Intro 10: {selected_profile['essay9']}"  
+#         )
 
-        # Create a one-paragraph string
-        profile_string_complete = (
-            f"Age: {selected_profile['age']}; "
-            f"Sex: {selected_profile['sex']}; "
-            f"Orientation: {selected_profile['orientation']}; "
-            f"Body Type: {selected_profile['body_type']}; "
-            f"Diet: {selected_profile['diet']}; "
-            f"Drinks: {selected_profile['drinks']}; "
-            f"Education: {selected_profile['education']}; "
-            f"Ethnicity: {selected_profile['ethnicity']}; "
-            f"Height: {selected_profile['height']}; "
-            f"Job: {selected_profile['job']}; "
-            f"Location: {selected_profile['location']}; "
-            f"Offspring: {selected_profile['offspring']}; "
-            f"Pets: {selected_profile['pets']}; "
-            f"Religion: {selected_profile['religion']}; "
-            f"Smokes: {selected_profile['smokes']}; "
-            f"Intro 1: {selected_profile['essay0']}; "
-            f"Intro 2: {selected_profile['essay1']}; "
-            f"Intro 3: {selected_profile['essay2']}; "
-            f"Intro 4: {selected_profile['essay3']}; "
-            f"Intro 5: {selected_profile['essay4']}; "
-            f"Intro 6: {selected_profile['essay5']}; "
-            f"Intro 7: {selected_profile['essay6']}; "
-            f"Intro 8: {selected_profile['essay7']}; "
-            f"Intro 9: {selected_profile['essay8']}; "    
-            f"Intro 10: {selected_profile['essay9']}"  
-        )
+#         profile_string_partial = (
+#             f"Age: {selected_profile['age']}; "
+#             f"Sex: {selected_profile['sex']}; "
+#             f"Orientation: {selected_profile['orientation']}; "
+#             f"Body Type: {selected_profile['body_type']}; "
+#             f"Diet: {selected_profile['diet']}; "
+#             f"Drinks: {selected_profile['drinks']}; "
+#             f"Education: {selected_profile['education']}; "
+#             f"Ethnicity: {selected_profile['ethnicity']}; "
+#             f"Height: {selected_profile['height']}; "
+#             f"Job: {selected_profile['job']}; "
+#             f"Location: {selected_profile['location']}; "
+#             f"Offspring: {selected_profile['offspring']}; "
+#             f"Pets: {selected_profile['pets']}; "
+#             f"Religion: {selected_profile['religion']}; "
+#             f"Smokes: {selected_profile['smokes']}."
+#         )
 
-        profile_string_partial = (
-            f"Age: {selected_profile['age']}; "
-            f"Sex: {selected_profile['sex']}; "
-            f"Orientation: {selected_profile['orientation']}; "
-            f"Body Type: {selected_profile['body_type']}; "
-            f"Diet: {selected_profile['diet']}; "
-            f"Drinks: {selected_profile['drinks']}; "
-            f"Education: {selected_profile['education']}; "
-            f"Ethnicity: {selected_profile['ethnicity']}; "
-            f"Height: {selected_profile['height']}; "
-            f"Job: {selected_profile['job']}; "
-            f"Location: {selected_profile['location']}; "
-            f"Offspring: {selected_profile['offspring']}; "
-            f"Pets: {selected_profile['pets']}; "
-            f"Religion: {selected_profile['religion']}; "
-            f"Smokes: {selected_profile['smokes']}."
-        )
+#         profile_string_complete_list.append(profile_string_complete)
+#         profile_string_partial_list.append(profile_string_partial)
 
-        profile_string_complete_list.append(profile_string_complete)
-        profile_string_partial_list.append(profile_string_partial)
-
-    return profile_string_complete_list, profile_string_partial_list
+#     return profile_string_complete_list, profile_string_partial_list
 
 
 def read_human_data_mypersonality(data_path):
@@ -176,7 +176,7 @@ def read_human_data_mypersonality(data_path):
     return profile_string_list, big_five_list
 
 
-def calculate_recency_scores(times, selected_time, predicates_num, decay_factor=0.95):
+def calculate_recency_scores(day, times, selected_time, predicates_num, decay_factor=0.95, prev_day=False):
     # Find the index of the selected time
     selected_index = times.index(selected_time)
     
@@ -188,10 +188,25 @@ def calculate_recency_scores(times, selected_time, predicates_num, decay_factor=
     
     intentions_recency.reverse()
     predicates_recency = [recency for recency in intentions_recency for _ in range(predicates_num)]
+
+    if day > 0 and prev_day:
+        selected_index = len(times) - 1
+        prev_intentions_recency = []
+        for i in range(selected_index, -1, -1):  # Start from selected_index, not selected_index - 1
+            recency = decay_factor ** (selected_index - i)
+            prev_intentions_recency.append(recency)
+        
+        prev_intentions_recency.reverse()
+        prev_predicates_recency = [recency for recency in prev_intentions_recency for _ in range(predicates_num)]
+
+        for _ in range(day):
+            intentions_recency = prev_intentions_recency + intentions_recency
+            predicates_recency = prev_predicates_recency + predicates_recency
+
     return intentions_recency, predicates_recency
 
 
-def calculate_relevance_scores(gt_text, activity_list):
+def calculate_relevance_scores(gt_text, activity_list, model):
     """
     Compute similarity scores between a given text and a list of activities.
     If activity_list is None, return None.
@@ -203,8 +218,6 @@ def calculate_relevance_scores(gt_text, activity_list):
         """
         Compute semantic similarity between the given text and activities.
         """
-        model = SentenceTransformer("all-MiniLM-L6-v2")
-        
         # Encode the ground truth text and activity list
         gt_embedding = model.encode([gt_text])  # Note the input is a list
         activity_embeddings = model.encode(activity_list)
@@ -219,14 +232,30 @@ def calculate_relevance_scores(gt_text, activity_list):
     return similarities
 
 
-def retrieve_memory(gt_text, activity_list, times, selected_time, predicates_num, decay_factor=0.95, top_k=5, retrieve_type="intention"):
+def retrieve_memory(gt_text, activity_list_original, day, times, selected_time, predicates_num, model, decay_factor=0.95, top_k=5, retrieve_type="intention", prev_day=False):
     # Check if activity_list is None
-    if not activity_list:
+    if not activity_list_original:
         return []
+    
+    if prev_day == False:
+        if retrieve_type == "intention":
+            activity_list = activity_list_original[int(day) * len(times):]
+        else:
+            activity_list = activity_list_original[int(day) * len(times) * predicates_num:]
+    else:
+        activity_list = activity_list_original
 
-    intentions_recency, predicates_recency = calculate_recency_scores(times, selected_time, predicates_num, decay_factor=0.95)
-    relevance_scores = calculate_relevance_scores(gt_text, activity_list)
+    intentions_recency, predicates_recency = calculate_recency_scores(day, times, selected_time, predicates_num, decay_factor=decay_factor, prev_day=prev_day)
+    relevance_scores = calculate_relevance_scores(gt_text, activity_list, model)
     recency_scores = intentions_recency if retrieve_type == "intention" else predicates_recency
+
+    # print()
+    # print(retrieve_type)
+    # print(len(intentions_recency))
+    # print(len(predicates_recency))
+    # print(len(relevance_scores))
+    # print(len(recency_scores))
+    # print()
 
     if len(relevance_scores) != len(recency_scores):
         raise ValueError("The lengths of relevance scores and recency scores must match.")
@@ -248,34 +277,94 @@ def retrieve_memory(gt_text, activity_list, times, selected_time, predicates_num
     return top_activity_list
 
 
-def traits_summary_gpt4(data_path, human_id, scene_id, profile_string, temperature_dict, model_dict, start_over=False):
-    output_dir = pathlib.Path(data_path) / "gpt4_response" / "human/traits_summary" / str(human_id).zfill(5) / scene_id
+def traits_summary_mllm(data_path, human_id, scene_id, profile_string, temperature_dict, model_dict, gpt=True, start_over=False):
+    if gpt:
+        output_dir = pathlib.Path(data_path) / "human/gpt_response" / "traits_summary" / str(human_id).zfill(5)
+    else:
+        output_dir = pathlib.Path(data_path) / "human/llama_response" / "traits_summary" / str(human_id).zfill(5)
     os.makedirs(output_dir, exist_ok=True)
     conversation_hist = []
 
     if start_over:
-        user, res = summarize_traits(profile_string, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=None)
+        user, res = summarize_traits(profile_string, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=None, gpt=gpt)
         time.sleep(20)
     else:
-        user, res = summarize_traits(profile_string, output_dir, existing_response=load_response("traits_summary", output_dir), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=None)
+        user, res = summarize_traits(profile_string, output_dir, existing_response=load_response("traits_summary", output_dir), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=None, gpt=gpt)
     conversation_hist.append([user, res])
 
     return conversation_hist
 
 
-def intention_proposal_gpt4(data_path, human_id, scene_id, time_tuple, retrieved_memory, room_list, profile_string, temperature_dict, model_dict, start_over=False):
-    output_dir = pathlib.Path(data_path) / "gpt4_response" / "human/intention_proposal" / str(human_id).zfill(5) / scene_id
+def intention_proposal_mllm(data_path, human_id, scene_id, time_tuple, retrieved_memory, room_list, profile_string, temperature_dict, model_dict, collab=2, gpt=True, start_over=False):
+    day, file_idx, time_ = time_tuple
+    if gpt:
+        output_dir = pathlib.Path(data_path) / "human/gpt_response" / f"collaboration_{collab}/intention_proposal" / str(human_id).zfill(5) / scene_id / day
+    else:
+        output_dir = pathlib.Path(data_path) / "human/llama_response" / f"collaboration_{collab}/intention_proposal" / str(human_id).zfill(5) / scene_id / day
     os.makedirs(output_dir, exist_ok=True)
-    file_idx, time_ = time_tuple
     conversation_hist = []
 
     if start_over:
-        user, res = propose_intention(time_, room_list, profile_string, retrieved_memory, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=None)
+        user, res = propose_intention(time_, room_list, profile_string, retrieved_memory, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=None, gpt=gpt)
         time.sleep(20)
     else:
-        user, res = propose_intention(time_, room_list, profile_string, retrieved_memory, output_dir, existing_response=load_response("intention_proposal", output_dir, file_idx=file_idx), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=None)
+        user, res = propose_intention(time_, room_list, profile_string, retrieved_memory, output_dir, existing_response=load_response("intention_proposal", output_dir, file_idx=file_idx), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=None, gpt=gpt)
     conversation_hist.append([user, res])
 
+    return conversation_hist
+
+
+def predicates_proposal_mllm(data_path, human_id, scene_id, time_tuple, intention_sentence, retrieved_memory, sampled_motion_list, obj_room_mapping, profile_string, conversation_hist, temperature_dict, model_dict, collab=2, gpt=True, start_over=False):
+    day, file_idx, time_ = time_tuple
+    if gpt:
+        output_dir = pathlib.Path(data_path) / "human/gpt_response" / f"collaboration_{collab}/predicates_proposal" / str(human_id).zfill(5) / scene_id / day
+    else:
+        output_dir = pathlib.Path(data_path) / "human/llama_response" / f"collaboration_{collab}/predicates_proposal" / str(human_id).zfill(5) / scene_id / day
+    os.makedirs(output_dir, exist_ok=True)
+    
+    if start_over:
+        user, res = propose_predicates(time_, intention_sentence, sampled_motion_list, obj_room_mapping, profile_string, retrieved_memory, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist, collab=collab, gpt=gpt)
+        time.sleep(20)
+    else:
+        user, res = propose_predicates(time_, intention_sentence, sampled_motion_list, obj_room_mapping, profile_string, retrieved_memory, output_dir, existing_response=load_response("predicates_proposal", output_dir, file_idx=file_idx), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist, collab=collab, gpt=gpt)
+    conversation_hist.append([user, res])
+
+    return conversation_hist
+
+
+def predicates_reflection_1_mllm(data_path, human_id, scene_id, time_tuple, intention_sentence, retrieved_memory, sampled_motion_list, obj_room_mapping, profile_string, conversation_hist, temperature_dict, model_dict, collab=2, gpt=True, start_over=False):
+    day, file_idx, time_ = time_tuple
+    if gpt:
+        output_dir = pathlib.Path(data_path) / "human/gpt_response" / f"collaboration_{collab}/predicates_reflection_1" / str(human_id).zfill(5) / scene_id / day
+    else:
+        output_dir = pathlib.Path(data_path) / "human/llama_response" / f"collaboration_{collab}/predicates_reflection_1" / str(human_id).zfill(5) / scene_id / day
+    os.makedirs(output_dir, exist_ok=True)
+
+    if start_over:
+        user, res = reflect_predicates_1(time_, intention_sentence, sampled_motion_list, obj_room_mapping, profile_string, retrieved_memory, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist, collab=collab, gpt=gpt)
+        time.sleep(20)
+    else:
+        user, res = reflect_predicates_1(time_, intention_sentence, sampled_motion_list, obj_room_mapping, profile_string, retrieved_memory, output_dir, existing_response=load_response("predicates_reflection_1", output_dir, file_idx=file_idx), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist, collab=collab, gpt=gpt)
+    conversation_hist.append([user, res])
+
+    return conversation_hist
+
+
+def predicates_reflection_2_mllm(data_path, human_id, scene_id, time_tuple, intention_sentence, retrieved_memory, sampled_motion_list, obj_room_mapping, profile_string, conversation_hist, temperature_dict, model_dict, collab=2, gpt=True, start_over=False):
+    day, file_idx, time_ = time_tuple
+    if gpt:
+        output_dir = pathlib.Path(data_path) / "human/gpt_response" / f"collaboration_{collab}/predicates_reflection_2" / str(human_id).zfill(5) / scene_id / day
+    else:
+        output_dir = pathlib.Path(data_path) / "human/llama_response" / f"collaboration_{collab}/predicates_reflection_2" / str(human_id).zfill(5) / scene_id / day
+    os.makedirs(output_dir, exist_ok=True)
+
+    if start_over:
+        user, res = reflect_predicates_2(time_, intention_sentence, sampled_motion_list, obj_room_mapping, profile_string, retrieved_memory, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist, collab=collab, gpt=gpt)
+        time.sleep(20)
+    else:
+        user, res = reflect_predicates_2(time_, intention_sentence, sampled_motion_list, obj_room_mapping, profile_string, retrieved_memory, output_dir, existing_response=load_response("predicates_reflection_2", output_dir, file_idx=file_idx), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist, collab=collab, gpt=gpt)
+    conversation_hist.append([user, res])
+    
     return conversation_hist
 
 
@@ -363,7 +452,7 @@ def convert_npy_to_npz(npy_file_path, output_npz_path):
     saved_npz_shapes = {key: saved_npz[key].shape for key in saved_npz_keys}
 
     return saved_npz_keys, saved_npz_shapes
-
+    
 
 def create_motion_sets(npy_file_folder_list, human_urdf_path, sample_motion=None, update=False):
     # motion_npz_path = os.path.join(data_path, "humanoids/humanoid_data/walk_motion/CMU_10_04_stageii.npz")
@@ -418,7 +507,57 @@ def get_motion_pkl_path(motion_set_name, motion_dict):
     return motion_dict.get(motion_set_name, None)
 
 
-def sample_obj_by_similarity(conversation_hist, object_dict, top_k=30):
+def most_similar_motion(free_motion, motion_list, model, top_k=1):
+    def compute_similarity(free_motion, motion_list):
+        # Encode sentences
+        emb = model.encode(free_motion)
+        motion_embeddings = model.encode(motion_list)
+        
+        # Compute similarities
+        similarities = model.similarity(emb, motion_embeddings)
+        return similarities
+    
+    # Compute similarity
+    similarities = compute_similarity(free_motion, motion_list)
+    
+    # Sample top K motions for each intention
+    sampled_motion_list = []
+
+    for sim in similarities:
+        top_indices = np.argsort(-sim)[:top_k]  # Get indices of top K similarities
+        sampled_motion = [motion_list[idx] for idx in top_indices]
+        sampled_motion_list.append(sampled_motion)
+
+    return sampled_motion
+
+
+def most_similar_object(obj_name, obj_dict, model):
+    """
+    Given an object name, find the most similar object name in the given dictionary.
+    
+    :param obj_name: The name of the object to compare.
+    :param obj_dict: A dictionary where keys are object names.
+    :return: The most similar object name and its corresponding value from the dictionary.
+    """
+    # Encode the target object name
+    obj_name_embedding = model.encode([obj_name])
+
+    # Encode all the keys in the dictionary
+    dict_keys = list(obj_dict.keys())
+    dict_key_embeddings = model.encode(dict_keys)
+
+    # Compute similarities
+    similarities = np.dot(dict_key_embeddings, obj_name_embedding.T).flatten()
+
+    # Find the index of the most similar key
+    most_similar_idx = np.argmax(similarities)
+    most_similar_obj_name = dict_keys[most_similar_idx]
+
+    # Return the most similar object name and its corresponding value from the dictionary
+    return most_similar_obj_name, obj_dict[most_similar_obj_name]
+
+
+def sample_obj_by_similarity(conversation_hist, object_dict, model, sample=True, top_k=30):
     """
     Extract intentions from conversation history and compute similarity scores with object names.
     """
@@ -426,8 +565,6 @@ def sample_obj_by_similarity(conversation_hist, object_dict, top_k=30):
         """
         Compute semantic similarity between intention sentences and object names.
         """
-        model = SentenceTransformer("all-MiniLM-L6-v2")
-        
         # Get object names with rooms
         object_names = [f"{name} in {data[1]}" for name, data in object_dict.items()]
         
@@ -442,6 +579,9 @@ def sample_obj_by_similarity(conversation_hist, object_dict, top_k=30):
     # Extract times and intentions
     times = extract_times(conversation_hist[0][1])
     intention_sentences = extract_intentions(conversation_hist[0][1])
+
+    if not sample:
+        return times, intention_sentences, [""]
     
     # Compute similarity
     similarities = compute_similarity(intention_sentences, object_dict)
@@ -463,7 +603,7 @@ def sample_obj_by_similarity(conversation_hist, object_dict, top_k=30):
     return times, intention_sentences, sampled_objects_dict_list
 
 
-def sample_motion_by_similarity(conversation_hist, motion_list, top_k=5):
+def sample_motion_by_similarity(conversation_hist, motion_list, model, top_k=5):
     """
     Extract intentions from conversation history and compute similarity scores with motions.
     """
@@ -471,8 +611,6 @@ def sample_motion_by_similarity(conversation_hist, motion_list, top_k=5):
         """
         Compute semantic similarity between intention sentences and motions.
         """
-        model = SentenceTransformer("all-MiniLM-L6-v2")
-        
         # Encode sentences
         intention_embeddings = model.encode(intention_sentences)
         motion_embeddings = model.encode(motion_list)
@@ -496,102 +634,3 @@ def sample_motion_by_similarity(conversation_hist, motion_list, top_k=5):
         sampled_motion_list.append(sampled_motion)
 
     return intention_sentences, sampled_motion_list
-
-
-def predicates_proposal_gpt4(data_path, human_id, scene_id, time_tuple, retrieved_memory, sampled_motion_list, obj_room_mapping, profile_string, conversation_hist, temperature_dict, model_dict, start_over=False):
-    output_dir = pathlib.Path(data_path) / "gpt4_response" / "human/predicates_proposal" / str(human_id).zfill(5) / scene_id
-    os.makedirs(output_dir, exist_ok=True)
-    file_idx, time_ = time_tuple
-    
-    if start_over:
-        user, res = propose_predicates(time_, sampled_motion_list, obj_room_mapping, profile_string, retrieved_memory, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
-        time.sleep(20)
-    else:
-        user, res = propose_predicates(time_, sampled_motion_list, obj_room_mapping, profile_string, retrieved_memory, output_dir, existing_response=load_response("predicates_proposal", output_dir, file_idx=file_idx), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
-    conversation_hist.append([user, res])
-
-    return conversation_hist
-
-
-def predicates_reflection_1_gpt4(data_path, human_id, scene_id, time_tuple, retrieved_memory, sampled_motion_list, obj_room_mapping, profile_string, conversation_hist, temperature_dict, model_dict, start_over=False):
-    output_dir = pathlib.Path(data_path) / "gpt4_response" / "human/predicates_reflection_1" / str(human_id).zfill(5) / scene_id
-    os.makedirs(output_dir, exist_ok=True)
-    file_idx, time_ = time_tuple
-
-    if start_over:
-        user, res = reflect_predicates_1(time_, sampled_motion_list, obj_room_mapping, profile_string, retrieved_memory, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
-        time.sleep(20)
-    else:
-        user, res = reflect_predicates_1(time_, sampled_motion_list, obj_room_mapping, profile_string, retrieved_memory, output_dir, existing_response=load_response("predicates_reflection_1", output_dir, file_idx=file_idx), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
-    conversation_hist.append([user, res])
-
-    return conversation_hist
-
-
-def predicates_reflection_2_gpt4(data_path, human_id, scene_id, time_tuple, retrieved_memory, sampled_motion_list, obj_room_mapping, profile_string, conversation_hist, temperature_dict, model_dict, start_over=False):
-    output_dir = pathlib.Path(data_path) / "gpt4_response" / "human/predicates_reflection_2" / str(human_id).zfill(5) / scene_id
-    os.makedirs(output_dir, exist_ok=True)
-    file_idx, time_ = time_tuple
-
-    if start_over:
-        user, res = reflect_predicates_2(time_, sampled_motion_list, obj_room_mapping, profile_string, retrieved_memory, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
-        time.sleep(20)
-    else:
-        user, res = reflect_predicates_2(time_, sampled_motion_list, obj_room_mapping, profile_string, retrieved_memory, output_dir, existing_response=load_response("predicates_reflection_2", output_dir, file_idx=file_idx), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=conversation_hist)
-    conversation_hist.append([user, res])
-    
-    return conversation_hist
-
-
-def most_similar_motion(free_motion, motion_list, top_k=1):
-    def compute_similarity(free_motion, motion_list):
-        model = SentenceTransformer("all-MiniLM-L6-v2")
-        
-        # Encode sentences
-        emb = model.encode(free_motion)
-        motion_embeddings = model.encode(motion_list)
-        
-        # Compute similarities
-        similarities = model.similarity(emb, motion_embeddings)
-        return similarities
-    
-    # Compute similarity
-    similarities = compute_similarity(free_motion, motion_list)
-    
-    # Sample top K motions for each intention
-    sampled_motion_list = []
-
-    for sim in similarities:
-        top_indices = np.argsort(-sim)[:top_k]  # Get indices of top K similarities
-        sampled_motion = [motion_list[idx] for idx in top_indices]
-        sampled_motion_list.append(sampled_motion)
-
-    return sampled_motion
-
-
-def most_similar_object(obj_name, obj_dict):
-    """
-    Given an object name, find the most similar object name in the given dictionary.
-    
-    :param obj_name: The name of the object to compare.
-    :param obj_dict: A dictionary where keys are object names.
-    :return: The most similar object name and its corresponding value from the dictionary.
-    """
-    model = SentenceTransformer("all-MiniLM-L6-v2")
-
-    # Encode the target object name
-    obj_name_embedding = model.encode([obj_name])
-
-    # Encode all the keys in the dictionary
-    dict_keys = list(obj_dict.keys())
-    dict_key_embeddings = model.encode(dict_keys)
-
-    # Compute similarities
-    similarities = np.dot(dict_key_embeddings, obj_name_embedding.T).flatten()
-
-    # Find the index of the most similar key
-    most_similar_idx = np.argmax(similarities)
-    most_similar_obj_name = dict_keys[most_similar_idx]
-
-    # Return the most similar object name and its corresponding value from the dictionary
-    return most_similar_obj_name, obj_dict[most_similar_obj_name]

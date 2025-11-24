@@ -12,6 +12,12 @@
 Habitat-Lab
 ==============================
 
+This is the **modified Habitat-Lab** for our work **[COOPERA](https://dannymcy.github.io/coopera/)**.
+
+Please refer to the main COOPERA repository 👉 [here](https://github.com/dannymcy/coopera_code).
+
+==============================
+
 Habitat-Lab is a modular high-level library for end-to-end development in embodied AI. It is designed to train agents to perform a wide variety of embodied AI tasks in indoor environments, as well as develop agents that can interact with humans in performing these tasks.
 
 Towards this goal, Habitat-Lab is designed to support the following features:

@@ -552,94 +552,133 @@ def _get_robot_spawns(
     :param agent: The agent to get the state for. If not specified, defaults to the simulator's articulated agent.
 
     :return: The robot's sampled spawn state (position, rotation) if successful (otherwise returns current state), and whether the placement was a failure (True for failure, False for success).
+
+    **Robust version that handles all navigation failure cases**
     """
-    assert (
-        distance_threshold > 0.0
-    ), f"Distance threshold must be positive, got {distance_threshold=}. You might want `place_agent_at_dist_from_pos` instead."
     if agent is None:
         agent = sim.articulated_agent
 
     start_rotation = agent.base_rot
     start_position = agent.base_pos
 
-    # Try to place the robot.
-    is_feasible_state = False
-    flag = np.inf
-    ignore_logic = 0
-    target_position_original = target_position
-    step_iter = 0
-    while is_feasible_state is False:
-        for _ in range(num_spawn_attempts):
-            # Place within `distance_threshold` of the object.
-            candidate_navmesh_position = (
-                sim.pathfinder.get_random_navigable_point_near(
-                    target_position,
-                    distance_threshold,
-                    island_index=sim.largest_island_idx,
-                )
-            )
-            # get_random_navigable_point_near() can return NaNs for start_position.
-            # If we assign nan position into agent.base_pos, we cannot revert it back
-            # We want to make sure that the generated start_position is valid
-            if np.isnan(candidate_navmesh_position).any():
-                flag = 1
-                continue
-
-            # get the horizontal distance (XZ planar projection) to the target position
-            hor_disp = candidate_navmesh_position - target_position
-            hor_disp[1] = 0
-            target_distance = np.linalg.norm(hor_disp)
-
-            if target_distance > distance_threshold:
-                flag = 2
-                continue
-
-            # Face the robot towards the object.
-            relative_target = target_position - candidate_navmesh_position
-            angle_to_object = get_angle_to_pos(relative_target)
-            rotation_noise = np.random.normal(0.0, rotation_perturbation_noise)
-            angle_to_object += rotation_noise
-
-            # Set the agent position and rotation
-            set_agent_base_via_obj_trans(
-                candidate_navmesh_position, angle_to_object, agent
-            )
-
-            is_feasible_state = True
-            if filter_colliding_states:
-                # Make sure the robot is not colliding with anything in this
-                # position.
-                sim.perform_discrete_collision_detection()
-                _, details = rearrange_collision(
-                    sim,
-                    False,
-                    ignore_base=ignore_logic,  # changed from False
-                )
-
-                # Only care about collisions between the robot and scene.
-                if ignore_logic == 0:
-                    is_feasible_state = details.robot_scene_colls == 0
-
-            if is_feasible_state:
-                # found a feasbile state: reset state and return proposed stated
-                agent.base_pos = start_position
-                agent.base_rot = start_rotation
-                return candidate_navmesh_position, angle_to_object, False
+    # Multiple fallback strategies
+    strategies = [
+        {"distance_multiplier": 1.0, "ignore_base": False, "use_any_island": False},
+        {"distance_multiplier": 1.0, "ignore_base": True, "use_any_island": False},
+        {"distance_multiplier": 1.25, "ignore_base": False, "use_any_island": False},
+        {"distance_multiplier": 1.25, "ignore_base": True, "use_any_island": False},
+        {"distance_multiplier": 1.5, "ignore_base": False, "use_any_island": False},
+        {"distance_multiplier": 1.5, "ignore_base": True, "use_any_island": False},
+        {"distance_multiplier": 1.75, "ignore_base": False, "use_any_island": False},
+        {"distance_multiplier": 1.75, "ignore_base": True, "use_any_island": False},
+        {"distance_multiplier": 2.0, "ignore_base": False, "use_any_island": False},
+        {"distance_multiplier": 2.0, "ignore_base": True, "use_any_island": False},
+        {"distance_multiplier": 2.5, "ignore_base": False, "use_any_island": False},
+        {"distance_multiplier": 2.5, "ignore_base": True, "use_any_island": False},
+        {"distance_multiplier": 1.0, "ignore_base": True, "use_any_island": True},
+        {"distance_multiplier": 1.25, "ignore_base": True, "use_any_island": True},
+        {"distance_multiplier": 1.5, "ignore_base": True, "use_any_island": True},
+        {"distance_multiplier": 1.75, "ignore_base": True, "use_any_island": True},      
+        {"distance_multiplier": 2.0, "ignore_base": True, "use_any_island": True},    
+        {"distance_multiplier": 2.5, "ignore_base": True, "use_any_island": True},
+        {"distance_multiplier": 3.0, "ignore_base": True, "use_any_island": True},
+        {"distance_multiplier": 5.0, "ignore_base": True, "use_any_island": True},
+        {"distance_multiplier": 7.0, "ignore_base": True, "use_any_island": True},
+        {"distance_multiplier": 10.0, "ignore_base": True, "use_any_island": True},
+    ]
+    
+    for strategy_idx, strategy in enumerate(strategies):
+        current_distance = distance_threshold * strategy["distance_multiplier"]
         
-        step_iter += 1
-        if flag == 1 or step_iter > 30:
-            ignore_logic = 1
-        elif flag == 2:
-            distance_threshold *= 1.01
-        # elif flag == 3:
-        #     fluctuation_range = 0.25
-        #     fluctuations = np.random.uniform(-fluctuation_range, fluctuation_range, size=target_position.shape)
-        #     target_position = target_position_original + fluctuations
+        for attempt in range(num_spawn_attempts):
+            try:
+                # Try different methods based on strategy level
+                if strategy["use_any_island"]:
+                    # Most permissive - any navigable point
+                    candidate_navmesh_position = sim.pathfinder.get_random_navigable_point()
+                    if candidate_navmesh_position is not None:
+                        # Find closest point to target within current_distance
+                        direction = target_position - candidate_navmesh_position
+                        direction[1] = 0  # XZ plane only
+                        if np.linalg.norm(direction) > current_distance:
+                            direction = direction / np.linalg.norm(direction) * current_distance
+                            candidate_navmesh_position = target_position - direction
+                else:
+                    # Try with current island
+                    candidate_navmesh_position = (
+                        sim.pathfinder.get_random_navigable_point_near(
+                            target_position,
+                            current_distance,
+                            island_index=sim.largest_island_idx,
+                        )
+                    )
+                
+                # Check for invalid positions
+                if candidate_navmesh_position is None or np.isnan(candidate_navmesh_position).any():
+                    continue
+                
+                # Snap to navmesh to ensure validity
+                candidate_navmesh_position = sim.pathfinder.snap_point(candidate_navmesh_position)
+                if candidate_navmesh_position is None or np.isnan(candidate_navmesh_position).any():
+                    continue
 
-    # failure to sample a feasbile state: reset state and return initial conditions
-    # agent.base_pos = start_position
-    # agent.base_rot = start_rotation
-    # return start_position, start_rotation, True
+                # Calculate angle to target
+                relative_target = target_position - candidate_navmesh_position
+                angle_to_object = get_angle_to_pos(relative_target)
+                rotation_noise = np.random.normal(0.0, rotation_perturbation_noise)
+                angle_to_object += rotation_noise
+
+                # Set position for collision check
+                set_agent_base_via_obj_trans(
+                    candidate_navmesh_position, angle_to_object, agent
+                )
+
+                is_feasible = True
+                if filter_colliding_states and not strategy["ignore_base"]:
+                    sim.perform_discrete_collision_detection()
+                    _, details = rearrange_collision(
+                        sim,
+                        False,
+                        ignore_base=strategy["ignore_base"],
+                    )
+                    is_feasible = details.robot_scene_colls == 0
+
+                if is_feasible:
+                    # Success! Reset and return the valid position
+                    agent.base_pos = start_position
+                    agent.base_rot = start_rotation
+                    return candidate_navmesh_position, angle_to_object, False
+                    
+            except Exception as e:
+                rearrange_logger.warning(f"Navigation attempt failed: {e}")
+                continue
+    
+    # Final fallback: Use embodied navigation with more robust parameters
+    from habitat.datasets.rearrange.navmesh_utils import embodied_unoccluded_navmesh_snap
+    
+    snap_point, orientation, success = embodied_unoccluded_navmesh_snap(
+        target_position=target_position,
+        height=1.5,
+        sim=sim,
+        island_id=-1,  # Any island
+        search_offset=distance_threshold * 5,  # Much larger search area
+        max_samples=1000,
+        test_batch_size=100,
+        min_sample_dist=0.05
+    )
+    
+    if success and snap_point is not None:
+        agent.base_pos = start_position
+        agent.base_rot = start_rotation
+        angle = get_angle_to_pos(target_position - snap_point) if orientation is None else orientation
+        return snap_point, angle, False
+    
+    # Ultimate fallback: Return current position (don't move)
+    rearrange_logger.error(
+        f"Failed to find any navigable position near {target_position}. "
+        f"Keeping agent at current position {start_position}"
+    )
+    return start_position, start_rotation, True
 
 
 def get_angle_to_pos(rel_pos: np.ndarray) -> float:
