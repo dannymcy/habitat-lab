@@ -21,13 +21,13 @@ def discover_predicates_prompt_1(time_, intention, retrieved_memory, fuzzy_trait
     You are a robot assisting a human.
 
     Instructions:
-    1.  Infer 2 additional tasks based on the human intention and initial task.
+    1.  Infer 2 additional tasks based on the human intention and initial task, so you MUST output EXACTLY 3 tasks in the Tasks list.
     2.	Task type: For each task, pick a dynamic object and place on a fixed, static object (static objects cannot be moved).
     3.  Tasks should be continuous and logical, and align with your Big 5 scores and profile.
     4.  Tasks must have temporal dependence with the intentions at previous times.
     5.  Ensure each task includes Act: [static_obj_name: your chosen static obj, dynamic_obj_name: your chosen dynamic obj] (exact format).
 
-    Write in the following format (1 given human task + 2 inferred by you). Do not output anything else:
+    Write in the following format (1 given human task + 2 inferred by you, so EXACTLY 3 tasks in the Tasks list). Do not output anything else:
     Time: xxx am/pm
     Intention: basic descriptions.
     Tasks: 
