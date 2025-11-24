@@ -553,7 +553,7 @@ if __name__ == "__main__":
         env.close()
 
         # Finetune LLM with LoRA, except after the last day
-        if day_counter < len(config['days']):
+        if day_counter < len(config['days']) and start_logic_lora:
             train_model(5, data_train_intentions, data_train_intentions, [day, time_], str(lora_intention_dir), data_type="intention", checkpoint_dir=None, pretrained=False)
             train_model(5, data_train_predicates, data_train_predicates, [day, time_], str(lora_predicates_dir), data_type="predicates", checkpoint_dir=None, pretrained=False)
     
