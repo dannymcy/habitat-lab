@@ -145,7 +145,7 @@ sentence_model = SentenceTransformer("all-MiniLM-L6-v2", device=DEVICE)
 
 
 # conda activate /hdd2/kai/Dynamic_Human_Robot_Value_Alignments/env
-# CUDA_VISIBLE_DEVICES="0,2,3" python coopera_main/benchmark/main.py --collab-setting 2
+# CUDA_VISIBLE_DEVICES="0,2,3" python coopera_main/benchmark/main.py --collab-type 2 --collab-setting 2 --start-logic-robot False --start-logic-lora False
 # watch -n 1 nvidia-smi
 if __name__ == "__main__":
     data_path = os.path.join(dir_path, "data")
@@ -534,9 +534,9 @@ if __name__ == "__main__":
 
 
         # Robot Inferring Human Traits
-        fuzzy_traits = traits_inference_mllm(results_path, human_idx, scene_id, [day, 0, None], [robot_intentions_hist[human_idx][-13:], robot_predicates_hist[human_idx]], [inferred_profile[human_idx], inferred_traits[human_idx]], temperature_dict, model_dict, method="main", collab=collab_type, setting=collab_setting, gpt=use_gpt_robot, start_over=start_logic_robot)[0][1]
+        fuzzy_traits = traits_inference_mllm(results_path, human_idx, scene_id, [day, 0, None], [robot_intentions_hist[human_idx][-13:], robot_predicates_hist[human_idx]], [inferred_profile[human_idx], inferred_traits[human_idx]], temperature_dict, model_dict, method="main", collab=collab_type, setting=collab_setting, gpt=use_gpt_robot, start_over=True)[0][1]
         inferred_traits[human_idx], inferred_profile[human_idx] = extract_scores_and_profile(fuzzy_traits)
-        inferred_traitsx_hist[human_idx].append(inferred_traits[human_idx])
+        inferred_traits_hist[human_idx].append(inferred_traits[human_idx])
         inferred_profile_hist[human_idx].append(inferred_profile[human_idx])
         _, eval_big_five_across_days_latest = calculate_ocean_pearson_correlation(big_five, inferred_traits_hist[human_idx], latest=True)
         _, eval_big_five_across_days_voting = calculate_ocean_pearson_correlation(big_five, inferred_traits_hist[human_idx], latest=False)
