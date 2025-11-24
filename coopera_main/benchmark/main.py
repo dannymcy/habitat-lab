@@ -411,7 +411,7 @@ if __name__ == "__main__":
             for k, (selected_intention_sentence, selected_sampled_static_obj_dict) in enumerate(zip(selected_intention_sentence_list, selected_sampled_static_obj_dict_list)):
                 robot_retrieved_predicates = []
 
-                robot_conversation_hist = predicates_discovery_mllm(results_path, human_idx, scene_id, [day, file_idx+k, time_], [selected_sampled_static_obj_dict, dynamic_obj_room_mapping], [robot_retrieved_intentions, robot_retrieved_predicates], selected_intention_sentence, [inferred_profile[human_idx], inferred_traits[human_idx]], robot_conversation_hist, temperature_dict, model_dict, method="main", collab=collab_type, setting=collab_setting, gpt=use_gpt_robot, start_over=start_logic_robot)
+                robot_conversation_hist = predicates_discovery_mllm(results_path, human_idx, scene_id, [day, file_idx+k, time_], [selected_sampled_static_obj_dict, dynamic_obj_room_mapping], [robot_retrieved_intentions, robot_retrieved_predicates, human_thoughts[0]], selected_intention_sentence, [inferred_profile[human_idx], inferred_traits[human_idx]], robot_conversation_hist, temperature_dict, model_dict, method="main", collab=collab_type, setting=collab_setting, gpt=use_gpt_robot, start_over=start_logic_robot)
                 robot_thoughts_batch, robot_acts_batch = extract_thoughts_and_acts(robot_conversation_hist[-1][1], search_txt=" Reason_human:")
                 if not robot_thoughts_batch: robot_thoughts_batch, robot_acts_batch = extract_thoughts_and_acts(robot_conversation_hist[-1][1], search_txt="")
                 robot_thoughts.extend(robot_thoughts_batch)
