@@ -436,7 +436,7 @@ if __name__ == "__main__":
             
             predicates_approval = []
             for k, _ in enumerate(selected_intention_sentence_list):
-                predicates_approval_res = predicate_approval_mllm(results_path, human_idx, scene_id, [day, file_idx+k, time_], human_thoughts, extract_inhand_obj_human(human_acts, collab=collab_type), robot_thoughts[k*predicates_num:(k+1)*predicates_num], extract_inhand_obj_robot(robot_acts[k*predicates_num:(k+1)*predicates_num], collab=collab_type), temperature_dict, model_dict, method="main", collab=collab_type, setting=collab_setting, start_over=start_logic_robot)[0][1]
+                predicates_approval_res = predicate_approval_mllm(results_path, human_idx, scene_id, [day, file_idx+k, time_], [human_thoughts, gt_intention_sentence], extract_inhand_obj_human(human_acts, collab=collab_type), robot_thoughts[k*predicates_num:(k+1)*predicates_num], extract_inhand_obj_robot(robot_acts[k*predicates_num:(k+1)*predicates_num], collab=collab_type), temperature_dict, model_dict, method="main", collab=collab_type, setting=collab_setting, start_over=start_logic_robot)[0][1]
                 predicates_approval_batch, _ = extract_predicate_approval(predicates_approval_res)
                 predicates_approval.extend(predicates_approval_batch)
 

@@ -11,7 +11,7 @@ from habitat.gpt.query import query
 def approve_predicate_prompt_1(time_, human_thoughts, human_acts, robot_thoughts, robot_acts):
     contents = f"""
     Input:
-    1.  Human intention: {human_thoughts[1]} at time: {time_}.
+    1.  Human intention: {human_thoughts[1]} at time: {time_}. 
     1.  Three current human tasks: {human_thoughts[0]} at time: {time_}.
     2.  Three robot-inferred tasks on enhancing comfort: {robot_thoughts}.
 
@@ -35,7 +35,7 @@ def approve_predicate_prompt_1(time_, human_thoughts, human_acts, robot_thoughts
 def approve_predicate_prompt_2(time_, human_thoughts, human_acts, robot_thoughts, robot_acts):
     contents = f"""
     Input:
-    1.  Five current human tasks: {human_thoughts} and desired objects: {human_acts} at time: {time_}.
+    1.  Five current human tasks: {human_thoughts[0]} and desired objects: {human_acts} at time: {time_}.
     2.  Five robot-inferred tasks on enhancing comfort: {robot_thoughts} and offered objects: {robot_acts}.
 
     You are the human. Decide if the robot's assistance and offered objects align with your needs.
