@@ -357,6 +357,9 @@ def create_agent_action(agent_dict, scene_id, collab_type=None):
         "base_velocity_action": BaseVelocityActionConfig(),
         "oracle_coord_action": OracleNavActionConfig(type="OracleNavCoordinateAction", spawn_max_dist_to_obj=1.0),
         "pick_obj_id_action": ActionConfig(type="PickObjIdAction"),
+        "place_obj_id_action": ActionConfig(type="PlaceObjIdAction"),
+        "move_EE_action": ActionConfig(type="MoveEEAction"),
+        "reset_EE_action": ActionConfig(type="ResetEEAction"),
         "humanoid_joint_action": HumanoidJointActionConfig(),
         "humanoid_navigate_action": OracleNavActionConfig(type="OracleNavCoordinateAction", 
                                                         motion_control="human_joints",
@@ -636,7 +639,7 @@ def pick_up_robot(env, observations, pick_obj_id, pick_object_trans):
         observations.append(env.step(action_dict)) 
 
 
-def place_robot(env, observations, pick_obj_id, pick_object_trans):
+def place_robot(env, observations, place_obj_id, place_object_trans):
     ee_transform = env.sim.agents_mgr[0].articulated_agent.ee_transform()  # Get EE transformation (rotation and translation)
     ee_pos = ee_transform.translation
     
@@ -645,7 +648,7 @@ def place_robot(env, observations, pick_obj_id, pick_object_trans):
         action_dict = {"action": (), "action_args": {}}
         observations.append(env.step(action_dict))
     for _ in range(100):
-        action_dict = {"action": ("agent_0_move_EE_action"), "action_args": {"agent_0_pick_obj_id": pick_obj_id}}
+        action_dict = {"action": ("agent_0_move_EE_action"), "action_args": {"agent_0_pick_obj_id": place_obj_id}}
         observations.append(env.step(action_dict))
 
     # Place object
@@ -653,7 +656,7 @@ def place_robot(env, observations, pick_obj_id, pick_object_trans):
         action_dict = {"action": (), "action_args": {}}
         observations.append(env.step(action_dict))
     for _ in range(100):
-        action_dict = {"action": ("agent_0_place_obj_id_action"), "action_args": {"agent_0_place_obj_id": pick_obj_id}}
+        action_dict = {"action": ("agent_0_place_obj_id_action"), "action_args": {"agent_0_place_obj_id": place_obj_id}}
         observations.append(env.step(action_dict)) 
 
     # Reset EE
