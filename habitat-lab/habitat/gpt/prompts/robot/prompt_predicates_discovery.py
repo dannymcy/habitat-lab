@@ -139,12 +139,12 @@ def discover_predicates(time_, retrieved_memory, intention, fuzzy_traits, obj_ro
     if collab == 1:
         if method == "finetuning":
             predicates_user_contents_filled = discover_predicates_finetuning_prompt_1(time_, intention, retrieved_memory, fuzzy_traits, obj_room_mapping)
-        elif method == "main":
+        elif method in ["main", "ag_human", "prompting", "oracle"]:
             predicates_user_contents_filled = discover_predicates_prompt_1(time_, intention, retrieved_memory, fuzzy_traits, obj_room_mapping)
     elif collab == 2:
         if method == "finetuning":
             predicates_user_contents_filled = discover_predicates_finetuning_prompt_2(time_, intention, retrieved_memory, fuzzy_traits, obj_room_mapping)
-        elif method == "main":
+        elif method in ["main", "ag_human", "prompting", "oracle"]:
             predicates_user_contents_filled = discover_predicates_prompt_2(time_, intention, retrieved_memory, fuzzy_traits, obj_room_mapping)
 
     if gpt or method == "finetuning":
@@ -165,7 +165,7 @@ def discover_predicates(time_, retrieved_memory, intention, fuzzy_traits, obj_ro
                 # print()
                 # print(model_dict['finetuning'])
                 # print()
-            elif method == "main":
+            elif method in ["main", "ag_human", "prompting", "oracle"]:
                 json_data = query(system, [("", []), (predicates_user_contents_filled, [])], [("", [])], save_path, model_dict['predicates_discovery'], temperature_dict['predicates_discovery'], debug=False)
     
         else:

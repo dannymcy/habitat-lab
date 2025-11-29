@@ -977,26 +977,58 @@ def append_evaluation_row(eval_csv_data, k, predicates_num, time_, gt_intention,
                           predicates_approval, eval_predicates, category_approval, 
                           eval_semantic, method="main"):
     """Append a row to evaluation CSV data."""
-    if k == 0:
-        # Full row
-        eval_csv_data.append([time_, gt_intention, pred_intentions[k], 
-                            answer_intentions[k], f"{human_thoughts[k]} {human_acts[k]}",
-                            f"{robot_thoughts[k]} {robot_acts[k]}", answer_predicates[k],
-                            profile_string, big_five, inferred_profile, inferred_traits,
-                            eval_big_five, intentions_approval, eval_intentions,
-                            predicates_approval, eval_predicates, category_approval, 
-                            eval_semantic])
-    elif k < predicates_num:
-        # Partial row with human data
-        eval_csv_data.append(["", "", pred_intentions[k], answer_intentions[k],
-                            f"{human_thoughts[k]} {human_acts[k]}",
-                            f"{robot_thoughts[k]} {robot_acts[k]}", answer_predicates[k]] 
-                            + [""] * 11)
-    else:
-        # Partial row with only robot data
-        eval_csv_data.append(["", "", "", "", "",
-                            f"{robot_thoughts[k]} {robot_acts[k]}", answer_predicates[k]]
-                            + [""] * 11)
+    if method in ["main", "ag_human"]:
+        if k == 0:
+            # Full row
+            eval_csv_data.append([time_, gt_intention, pred_intentions[k], 
+                                answer_intentions[k], f"{human_thoughts[k]} {human_acts[k]}",
+                                f"{robot_thoughts[k]} {robot_acts[k]}", answer_predicates[k],
+                                profile_string, big_five, inferred_profile, inferred_traits,
+                                eval_big_five, intentions_approval, eval_intentions,
+                                predicates_approval, eval_predicates, category_approval, 
+                                eval_semantic])
+        elif k < predicates_num:
+            # Partial row with human data
+            eval_csv_data.append(["", "", pred_intentions[k], answer_intentions[k],
+                                f"{human_thoughts[k]} {human_acts[k]}",
+                                f"{robot_thoughts[k]} {robot_acts[k]}", answer_predicates[k]] 
+                                + [""] * 11)
+        else:
+            # Partial row with only robot data
+            eval_csv_data.append(["", "", "", "", "",
+                                f"{robot_thoughts[k]} {robot_acts[k]}", answer_predicates[k]]
+                                + [""] * 11)
+    
+    elif method in ["prompting", "oracle"]:
+        # For prompting, we have single intention and direct tasks without classifiers
+        for k in range(predicates_num):
+            if k == 0:
+                # Full row for first task
+                eval_csv_data.append([
+                    time_, 
+                    gt_intention,  # Human ground truth intention
+                    pred_intentions,  # Single robot predicted intention
+                    f"{human_thoughts[k]} {human_acts[k]}",
+                    f"{robot_thoughts[k]} {robot_acts[k]}", 
+                    profile_string, 
+                    big_five, 
+                    inferred_profile, 
+                    inferred_traits,
+                    eval_big_five, 
+                    intentions_approval, 
+                    eval_intentions,
+                    predicates_approval, 
+                    eval_predicates, 
+                    category_approval, 
+                    eval_semantic
+                ])
+            else:
+                # Partial rows for remaining tasks
+                eval_csv_data.append([
+                    "", "", "",
+                    f"{human_thoughts[k]} {human_acts[k]}",
+                    f"{robot_thoughts[k]} {robot_acts[k]}"
+                ] + [""] * 11)
 
 
 def save_evaluation_results(eval_csv_path, eval_txt_path, eval_csv_data, data_train_intentions, data_train_predicates, day, method="main"):
@@ -1012,7 +1044,7 @@ def save_evaluation_results(eval_csv_path, eval_txt_path, eval_csv_data, data_tr
         day: Current day string for sheet naming
     """
     # Define header for the Excel file
-    if method == "main":
+    if method in ["main", "ag_human"]:
         header = [
             "Time", 
             "Human Intention", 
@@ -1034,36 +1066,84 @@ def save_evaluation_results(eval_csv_path, eval_txt_path, eval_csv_data, data_tr
             "Task Object Category Eval (Acc, F1 (macro, weighted, binary)); Semantic Similarity"
         ]
     
-    # Create DataFrame
-    df = pd.DataFrame(eval_csv_data, columns=header)
+        # Create DataFrame
+        df = pd.DataFrame(eval_csv_data, columns=header)
+        
+        # Save to Excel with auto-width columns
+        if not os.path.exists(eval_csv_path):
+            # File doesn't exist, create new one
+            with pd.ExcelWriter(eval_csv_path, engine='openpyxl', mode='w') as writer:
+                df.to_excel(writer, index=False, sheet_name=f'eval_{day}')
+                
+                # Auto-adjust column widths
+                worksheet = writer.sheets[f'eval_{day}']
+                for column in df:
+                    column_length = max(df[column].astype(str).map(len).max(), len(column))
+                    col_idx = df.columns.get_loc(column)
+                    worksheet.column_dimensions[get_column_letter(col_idx + 1)].width = column_length + 2
+        else:
+            # File exists, append with replace option
+            with pd.ExcelWriter(eval_csv_path, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
+                df.to_excel(writer, index=False, sheet_name=f'eval_{day}')
+                
+                # Auto-adjust column widths
+                worksheet = writer.sheets[f'eval_{day}']
+                for column in df:
+                    column_length = max(df[column].astype(str).map(len).max(), len(column))
+                    col_idx = df.columns.get_loc(column)
+                    worksheet.column_dimensions[get_column_letter(col_idx + 1)].width = column_length + 2
+        
+        # Save training data to text file
+        with open(eval_txt_path, 'w') as f:
+            f.write("data_train_intentions:\n")
+            f.write(str(data_train_intentions) + "\n\n")
+            f.write("data_train_predicates:\n")
+            f.write(str(data_train_predicates) + "\n\n")
     
-    # Save to Excel with auto-width columns
-    if not os.path.exists(eval_csv_path):
-        # File doesn't exist, create new one
-        with pd.ExcelWriter(eval_csv_path, engine='openpyxl', mode='w') as writer:
-            df.to_excel(writer, index=False, sheet_name=f'eval_{day}')
-            
-            # Auto-adjust column widths
-            worksheet = writer.sheets[f'eval_{day}']
-            for column in df:
-                column_length = max(df[column].astype(str).map(len).max(), len(column))
-                col_idx = df.columns.get_loc(column)
-                worksheet.column_dimensions[get_column_letter(col_idx + 1)].width = column_length + 2
-    else:
-        # File exists, append with replace option
-        with pd.ExcelWriter(eval_csv_path, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
-            df.to_excel(writer, index=False, sheet_name=f'eval_{day}')
-            
-            # Auto-adjust column widths
-            worksheet = writer.sheets[f'eval_{day}']
-            for column in df:
-                column_length = max(df[column].astype(str).map(len).max(), len(column))
-                col_idx = df.columns.get_loc(column)
-                worksheet.column_dimensions[get_column_letter(col_idx + 1)].width = column_length + 2
-    
-    # Save training data to text file
-    with open(eval_txt_path, 'w') as f:
-        f.write("data_train_intentions:\n")
-        f.write(str(data_train_intentions) + "\n\n")
-        f.write("data_train_predicates:\n")
-        f.write(str(data_train_predicates) + "\n\n")
+    elif method in ["prompting", "oracle"]:
+        # Simplified header without classifier columns
+        header = [
+            "Time", 
+            "Human Intention", 
+            "Robot Inferred Intention",  # Single intention
+            "Human Task", 
+            "Robot Inferred Task", 
+            "Human Traits", 
+            "Human Big-5", 
+            "Robot Inferred Traits", 
+            "Robot Inferred Big-5", 
+            "Big-5 Eval (Corr_latest, Corr_voting)", 
+            "Intention LLM Approval",  
+            "Intention Eval (Acc, F1 (macro, weighted, binary))",  
+            "Task LLM Approval",  
+            "Task Eval (Acc, F1 (macro, weighted, binary))", 
+            "Task Object Category Approval", 
+            "Task Object Category Eval; Semantic Similarity"
+        ]
+        
+        # Create DataFrame
+        df = pd.DataFrame(eval_csv_data, columns=header)
+        
+        # Save to Excel with auto-width columns
+        if not os.path.exists(eval_csv_path):
+            with pd.ExcelWriter(eval_csv_path, engine='openpyxl', mode='w') as writer:
+                df.to_excel(writer, index=False, sheet_name=f'eval_{day}')
+                worksheet = writer.sheets[f'eval_{day}']
+                for column in df:
+                    column_length = max(df[column].astype(str).map(len).max(), len(column))
+                    col_idx = df.columns.get_loc(column)
+                    worksheet.column_dimensions[get_column_letter(col_idx + 1)].width = column_length + 2
+        else:
+            with pd.ExcelWriter(eval_csv_path, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
+                df.to_excel(writer, index=False, sheet_name=f'eval_{day}')
+                worksheet = writer.sheets[f'eval_{day}']
+                for column in df:
+                    column_length = max(df[column].astype(str).map(len).max(), len(column))
+                    col_idx = df.columns.get_loc(column)
+                    worksheet.column_dimensions[get_column_letter(col_idx + 1)].width = column_length + 2
+        
+        # No training data for prompting (no classifiers to train)
+        if eval_txt_path:
+            with open(eval_txt_path, 'w') as f:
+                f.write("Direct Prompting Method - No classifier training data\n")
+                f.write(f"Day: {day}\n")

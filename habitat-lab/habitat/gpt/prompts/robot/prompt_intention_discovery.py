@@ -213,14 +213,14 @@ def discover_intention(time_, retrieved_memory, fuzzy_traits, video_dirs, output
             intention_user_contents_filled = discover_intention_prompting_prompt_1(time_, first_predicate, fuzzy_traits, retrieved_memory)
         elif method == "ag_intent":
             intention_user_contents_filled = discover_intention_ag_intent_prompt_1(time_, first_predicate, fuzzy_traits, retrieved_memory)
-        elif method == "main":
+        elif method in ["main", "ag_human"]:
             intention_user_contents_filled = discover_intention_prompt_1(time_, first_predicate, fuzzy_traits, retrieved_memory)
     elif collab == 2:
         if method == "prompting":
             intention_user_contents_filled = discover_intention_prompting_prompt_2(time_, fuzzy_traits, retrieved_memory)
         elif method == "ag_intent":
             intention_user_contents_filled = discover_intention_ag_intent_prompt_2(time_, fuzzy_traits, retrieved_memory)
-        elif method == "main":
+        elif method in ["main", "ag_human"]:
             intention_user_contents_filled = discover_intention_prompt_2(time_, fuzzy_traits, retrieved_memory)
 
     if gpt:
