@@ -364,7 +364,7 @@ if __name__ == "__main__":
 
 
             # =====================================================================================================================
-            # Robot Inferring Intentions
+            # Robot Inferring Intention
             if use_gpt_human:
                 video_dir_search_pattern = os.path.join(replay_dir, f"human/gpt_response/collaboration_{collab_type}/{str(human_idx).zfill(5)}/{scene_id}/{day}/*_{time_}")
             else:

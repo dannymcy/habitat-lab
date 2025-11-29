@@ -364,13 +364,14 @@ if __name__ == "__main__":
 
 
             # =====================================================================================================================
-            # Robot Inferring Intentions
+            # Robot Knows Human Intention
             if use_gpt_human:
                 video_dir_search_pattern = os.path.join(replay_dir, f"human/gpt_response/collaboration_{collab_type}/{str(human_idx).zfill(5)}/{scene_id}/{day}/*_{time_}")
             else:
                 video_dir_search_pattern = os.path.join(replay_dir, f"human/llama_response/collaboration_{collab_type}/{str(human_idx).zfill(5)}/{scene_id}/{day}/*_{time_}")
             video_dir = glob.glob(video_dir_search_pattern)[0]
             
+            robot_conversation_hist = []
             robot_retrieved_intentions = robot_intentions_hist[human_idx][-3:] if len(robot_intentions_hist[human_idx]) >= 3 else (robot_intentions_hist[human_idx] if robot_intentions_hist[human_idx] else [])
             robot_retrieved_predicates = []
             pred_intention_sentence, robot_sampled_static_obj_dict = gt_intention_sentence, human_sampled_static_obj_dict
