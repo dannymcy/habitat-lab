@@ -1012,7 +1012,7 @@ def append_evaluation_row(eval_csv_data, k, predicates_num, time_, gt_intention,
                                 f"{robot_thoughts[k]} {robot_acts[k]}", answer_predicates[k]]
                                 + [""] * 11)
     
-    elif method in ["prompting", "oracle"]:
+    elif method in ["prompting", "oracle", "finetuning"]:
         # For prompting, we have single intention and direct tasks without classifiers
         for kk in range(predicates_num):
             if kk == 0:
@@ -1148,7 +1148,7 @@ def save_evaluation_results(eval_csv_path, eval_txt_path, eval_csv_data, data_tr
                 f.write(f"{method} Method - No classifier training data\n")
                 f.write(f"Day: {day}\n")
     
-    elif method in ["prompting", "oracle"]:
+    elif method in ["prompting", "oracle", "finetuning"]:
         # Simplified header without classifier columns
         header = [
             "Time", 

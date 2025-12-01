@@ -132,9 +132,9 @@ def traits_inference_mllm(data_path, human_id, scene_id, time_tuple, retrieved_m
     return conversation_hist
 
 
-def motion_description_mllm(data_path, human_id, scene_id, time_tuple, video_dirs, temperature_dict, model_dict, method="finetuning", start_over=False):
+def motion_description_mllm(data_path, human_id, scene_id, time_tuple, video_dirs, temperature_dict, model_dict, method="finetuning", collab=2, setting=1, start_over=False):
     day, file_idx, time_ = time_tuple
-    output_dir = pathlib.Path(data_path) / "robot/gpt_response" / f"{method}/motion_description" / str(human_id).zfill(5) / scene_id / day
+    output_dir = pathlib.Path(data_path) / "robot/gpt_response" / f"collaboration_{collab}/setting_{setting}" / f"{method}/motion_description" / str(human_id).zfill(5) / scene_id / day
     os.makedirs(output_dir, exist_ok=True)
     conversation_hist = []
 
@@ -148,17 +148,17 @@ def motion_description_mllm(data_path, human_id, scene_id, time_tuple, video_dir
     return conversation_hist
 
 
-def intention_inference_mllm(data_path, human_id, scene_id, time_tuple, motion_description, retrieved_memory, fuzzy_traits, temperature_dict, model_dict, method="finetuning", start_over=False):
+def intention_inference_mllm(data_path, human_id, scene_id, time_tuple, motion_description, retrieved_memory, fuzzy_traits, temperature_dict, model_dict, method="finetuning", collab=2, setting=1, start_over=False):
     day, file_idx, time_ = time_tuple
-    output_dir = pathlib.Path(data_path) / "robot/gpt_response" / f"{method}/intention_inference" / str(human_id).zfill(5) / scene_id / day
+    output_dir = pathlib.Path(data_path) / "robot/gpt_response" / f"collaboration_{collab}/setting_{setting}" / f"{method}/intention_inference" / str(human_id).zfill(5) / scene_id / day
     os.makedirs(output_dir, exist_ok=True)
     conversation_hist = []
 
     if start_over:
-        user, res = infer_intention(time_, retrieved_memory, fuzzy_traits, motion_description, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=None)
+        user, res = infer_intention(time_, retrieved_memory, fuzzy_traits, motion_description, output_dir, existing_response=None, temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=None, collab=collab)
         time.sleep(20)
     else:
-        user, res = infer_intention(time_, retrieved_memory, fuzzy_traits, motion_description, output_dir, existing_response=load_response("intention_inference", output_dir, file_idx=file_idx), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=None)
+        user, res = infer_intention(time_, retrieved_memory, fuzzy_traits, motion_description, output_dir, existing_response=load_response("intention_inference", output_dir, file_idx=file_idx), temperature_dict=temperature_dict, model_dict=model_dict, conversation_hist=None, collab=collab)
     conversation_hist.append([user, res])
 
     return conversation_hist

@@ -53,7 +53,7 @@ def approve_intention(time_, intentions, output_path, existing_response=None, te
                   model_dict=None, conversation_hist=None, method="main", collab=2):
 
     intentions_num = 5 if collab == 2 else 3
-    if method == "prompting":
+    if method in ["prompting", "finetuning"]:
         collaboration_user_contents_filled = approve_intention_prompting_prompt(time_, intentions)
     elif method in ["main", "ag_human", "random_"]:
         collaboration_user_contents_filled = approve_intention_prompt(time_, intentions, intentions_num)

@@ -36,6 +36,7 @@ def infer_intention_prompt(time_, motion_description, fuzzy_traits, retrieved_me
         Time: xxx am/pm
         Intention: basic descriptions.
         """
+    
     elif collab == 2:
         contents = f"""
         Input:
@@ -61,9 +62,9 @@ def infer_intention_prompt(time_, motion_description, fuzzy_traits, retrieved_me
 
 
 def infer_intention(time_, retrieved_memory, fuzzy_traits, motion_description, output_path, existing_response=None, temperature_dict=None, 
-                  model_dict=None, conversation_hist=None):
+                  model_dict=None, conversation_hist=None, collab=2):
 
-    intention_user_contents_filled = infer_intention_prompt(time_, motion_description, fuzzy_traits, retrieved_memory)
+    intention_user_contents_filled = infer_intention_prompt(time_, motion_description, fuzzy_traits, retrieved_memory, collab=collab)
 
     if existing_response is None:
         system = "You are a helpful assistant."
@@ -77,9 +78,9 @@ def infer_intention(time_, retrieved_memory, fuzzy_traits, motion_description, o
         print("=" * 20, "Inferring Intention", "=" * 20)
         print("=" * 50)
         
-        json_data = query(system, [(intention_user_contents_filled, [])], [], save_path, model_dict['finetune'], temperature_dict['finetune'], debug=False)
+        json_data = query(system, [(intention_user_contents_filled, [])], [], save_path, model_dict['finetuning'], temperature_dict['finetuning'], debug=False)
         print()
-        print(54321, model_dict['finetune'])
+        print("DEBUG", model_dict['finetuning'])
         print()
 
     else:

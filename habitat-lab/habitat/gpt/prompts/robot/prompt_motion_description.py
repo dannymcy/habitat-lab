@@ -44,7 +44,7 @@ def describe_motion(time_, video_dirs, output_path, existing_response=None, temp
             image_paths = [f for f in all_files if f.endswith(('.jpg', '.png'))]
             for img_path in image_paths:
                 img_vis = cv2.imread(os.path.join(video_dir, img_path))
-                # img_vis = cv2.cvtColor(img_vis, cv2.COLOR_BGR2RGB)  # Uncomment if needed
+                img_vis = cv2.cvtColor(img_vis, cv2.COLOR_BGR2RGB)  # Uncomment if needed
                 encoded_img = encode_image(img_vis)
                 encoded_img_list.append(encoded_img)
 
@@ -52,7 +52,7 @@ def describe_motion(time_, video_dirs, output_path, existing_response=None, temp
         print("=" * 20, "Describing Motion", "=" * 20)
         print("=" * 50)
         
-        json_data = query(system, [(motion_user_contents_filled, encoded_img_list)], [], save_path, model_dict["finetuned_base_model"], temperature_dict['finetune'], debug=False)
+        json_data = query(system, [(motion_user_contents_filled, encoded_img_list)], [], save_path, model_dict['motion_description'], temperature_dict['motion_description'], debug=False)
    
     else:
         with open(existing_response, 'r') as f:

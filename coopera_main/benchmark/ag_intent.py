@@ -216,7 +216,7 @@ if __name__ == "__main__":
     # Restart robot task classification or not
     start_logic_lora = args.start_logic_lora
 
-    # List of avaiablie GPT models (https://platform.openai.com/docs/pricing)
+    # List of available GPT models (https://platform.openai.com/docs/pricing)
     model_dict = {
         "traits_summary": "gpt-5.1",
         "intention_proposal": "gpt-5.1",
@@ -242,7 +242,7 @@ if __name__ == "__main__":
     }
 
     # Override if using GPT-5-series models
-    if any("gpt-5" in model for model in model_dict.values()) and use_gpt_human:
+    if any("gpt-5" in model for model in model_dict.values()) and use_gpt_robot:
         temperature_dict = {temp: 1 for temp in temperature_dict}
 
     profile_string_list, big_five_list = read_human_data_mypersonality(data_path)

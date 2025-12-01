@@ -65,7 +65,26 @@ def discover_predicates_prompt_2(time_, intention, retrieved_memory, fuzzy_trait
     return contents
 
 
-def discover_predicates_finetuning_response(time_, intention, thoughts, acts, predicates_num):
+def discover_predicates_finetuning_response_1(time_, intention, thoughts, acts, predicates_num):
+    contents = f"Time: {time_}\nIntention: {intention}\nTasks:\n"
+
+    for i in range(predicates_num):
+        # Parse action phrase: "pick {dynamic_obj} and place on {static_obj}"
+        act = acts[i]
+        if "pick " in act and " and place on " in act:
+            dynamic_obj = act.split("pick ")[1].split(" and place on ")[0]
+            static_obj = act.split(" and place on ")[1]
+        else:
+            # Fallback if format doesn't match
+            dynamic_obj = act
+            static_obj = ""
+        
+        contents += f"{i+1}. Thought: {thoughts[i]} Act: [static_obj_name: {static_obj}, dynamic_obj_name: {dynamic_obj}]\n"
+    
+    return contents
+
+
+def discover_predicates_finetuning_response_2(time_, intention, thoughts, acts, predicates_num):
     contents = f"Time: {time_}\nIntention: {intention}\nTasks:\n"
 
     # Loop over the number of predicates and append each Thought-Act pair
@@ -162,9 +181,9 @@ def discover_predicates(time_, retrieved_memory, intention, fuzzy_traits, obj_ro
             
             if method == "finetuning":
                 json_data = query(system, [("", []), (predicates_user_contents_filled, [])], [("", [])], save_path, model_dict['finetuning'], temperature_dict['finetuning'], debug=False)
-                # print()
-                # print(model_dict['finetuning'])
-                # print()
+                print()
+                print("DEBUG", model_dict['finetuning'])
+                print()
             elif method in ["main", "ag_human", "prompting", "oracle", "random_"]:
                 json_data = query(system, [("", []), (predicates_user_contents_filled, [])], [("", [])], save_path, model_dict['predicates_discovery'], temperature_dict['predicates_discovery'], debug=False)
     

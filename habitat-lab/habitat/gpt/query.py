@@ -66,7 +66,7 @@ def finetune_openai(data, suffix, model_path, n_epochs=1, model="gpt-4o-mini-202
         hyperparameters=hyperparameters,
         seed=42
     )
-    finetuned_model_name = wait_for_finetune_completion(finetune_job.id, model_path)
+    finetuned_model_name = wait_for_finetune_completion_openai(finetune_job.id, model_path)
 
     return finetuned_model_name
 

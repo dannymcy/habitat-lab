@@ -238,7 +238,7 @@ def discover_intention(time_, retrieved_memory, fuzzy_traits, video_dirs, output
                 image_paths = [f for f in all_files if f.endswith(('.jpg', '.png'))]
                 for img_path in image_paths:
                     img_vis = cv2.imread(os.path.join(video_dir, img_path))
-                    # img_vis = cv2.cvtColor(img_vis, cv2.COLOR_BGR2RGB)  # Uncomment if needed
+                    img_vis = cv2.cvtColor(img_vis, cv2.COLOR_BGR2RGB)  # Uncomment if needed
                     encoded_img = encode_image(img_vis)
                     encoded_img_list.append(encoded_img)
 
