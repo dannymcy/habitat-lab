@@ -94,7 +94,7 @@ def discover_predicates_finetuning_prompt_1(time_, intention, retrieved_memory, 
     4.  Tasks must have temporal dependence with the intentions at previous times.
     5.  Ensure each task includes Act: [static_obj_name: your chosen static obj, dynamic_obj_name: your chosen dynamic obj] (exact format).
 
-    Write in the following format (make sure there are 3 tasks: 1 given human task + 2 inferred by you). Do not output anything else:
+    Write in the following format (1 given human task + 2 inferred by you, so EXACTLY 3 tasks in the Tasks list). Do not output anything else:
     Time: xxx am/pm
     Intention: basic descriptions.
     Tasks: 
@@ -139,12 +139,12 @@ def discover_predicates(time_, retrieved_memory, intention, fuzzy_traits, obj_ro
     if collab == 1:
         if method == "finetuning":
             predicates_user_contents_filled = discover_predicates_finetuning_prompt_1(time_, intention, retrieved_memory, fuzzy_traits, obj_room_mapping)
-        elif method in ["main", "ag_human", "prompting", "oracle"]:
+        elif method in ["main", "ag_human", "prompting", "oracle", "random_"]:
             predicates_user_contents_filled = discover_predicates_prompt_1(time_, intention, retrieved_memory, fuzzy_traits, obj_room_mapping)
     elif collab == 2:
         if method == "finetuning":
             predicates_user_contents_filled = discover_predicates_finetuning_prompt_2(time_, intention, retrieved_memory, fuzzy_traits, obj_room_mapping)
-        elif method in ["main", "ag_human", "prompting", "oracle"]:
+        elif method in ["main", "ag_human", "prompting", "oracle", "random_"]:
             predicates_user_contents_filled = discover_predicates_prompt_2(time_, intention, retrieved_memory, fuzzy_traits, obj_room_mapping)
 
     if gpt or method == "finetuning":
@@ -165,7 +165,7 @@ def discover_predicates(time_, retrieved_memory, intention, fuzzy_traits, obj_ro
                 # print()
                 # print(model_dict['finetuning'])
                 # print()
-            elif method in ["main", "ag_human", "prompting", "oracle"]:
+            elif method in ["main", "ag_human", "prompting", "oracle", "random_"]:
                 json_data = query(system, [("", []), (predicates_user_contents_filled, [])], [("", [])], save_path, model_dict['predicates_discovery'], temperature_dict['predicates_discovery'], debug=False)
     
         else:

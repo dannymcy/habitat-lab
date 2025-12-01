@@ -166,7 +166,7 @@ def discover_intention_ag_intent_prompt_1(time_, first_predicate, fuzzy_traits, 
     3.  Tasks should be continuous and logical, and align with your Big 5 scores and profile.
     4.  Ensure each task includes Act: [static_obj_name: your chosen static obj, dynamic_obj_name: your chosen dynamic obj] (exact format).
 
-    Write in the following format (1 given human task + 2 inferred by you). Do not output anything else:
+    Write in the following format (1 given human task + 2 inferred by you, so EXACTLY 3 tasks in the Tasks list). Do not output anything else:
     Time: xxx am/pm
     Intention: basic descriptions.
     Tasks: 
@@ -213,14 +213,14 @@ def discover_intention(time_, retrieved_memory, fuzzy_traits, video_dirs, output
             intention_user_contents_filled = discover_intention_prompting_prompt_1(time_, first_predicate, fuzzy_traits, retrieved_memory)
         elif method == "ag_intent":
             intention_user_contents_filled = discover_intention_ag_intent_prompt_1(time_, first_predicate, fuzzy_traits, retrieved_memory)
-        elif method in ["main", "ag_human"]:
+        elif method in ["main", "ag_human", "random_"]:
             intention_user_contents_filled = discover_intention_prompt_1(time_, first_predicate, fuzzy_traits, retrieved_memory)
     elif collab == 2:
         if method == "prompting":
             intention_user_contents_filled = discover_intention_prompting_prompt_2(time_, fuzzy_traits, retrieved_memory)
         elif method == "ag_intent":
             intention_user_contents_filled = discover_intention_ag_intent_prompt_2(time_, fuzzy_traits, retrieved_memory)
-        elif method in ["main", "ag_human"]:
+        elif method in ["main", "ag_human", "random_"]:
             intention_user_contents_filled = discover_intention_prompt_2(time_, fuzzy_traits, retrieved_memory)
 
     if gpt:

@@ -84,7 +84,7 @@ def parse_args():
     parser.add_argument('--start-logic-robot', type=lambda x: x.lower() == 'true',
                         default=True,
                         help='Restart robot intention/task discovery (True/False, default: True)')
-
+    
     # GPU configuration
     parser.add_argument('--gpu-id', type=str, default='0',
                         help='the GPU id to run Habitat simulation and put Sentence Transformer')
@@ -141,7 +141,7 @@ sentence_model = SentenceTransformer("all-MiniLM-L6-v2", device=DEVICE)
 
 
 # conda activate /hdd2/kai/Dynamic_Human_Robot_Value_Alignments/env
-# CUDA_VISIBLE_DEVICES="1" python coopera_main/benchmark/oracle.py --collab-type 2 --collab-setting 2 --start-logic-robot True
+# CUDA_VISIBLE_DEVICES="1" python coopera_main/benchmark/random_.py --collab-type 1 --collab-setting 1 --start-logic-robot True
 # watch -n 1 nvidia-smi
 if __name__ == "__main__":
     data_path = os.path.join(dir_path, "data")
@@ -244,9 +244,9 @@ if __name__ == "__main__":
             '5 pm', '6 pm', '7 pm', '8 pm', '9 pm'
     ]
     if collab_type == 1:
-        predicates_num, intentions_num = 3, 1
+        predicates_num, intentions_num = 3, 3
     elif collab_type == 2:
-        predicates_num, intentions_num = 5, 1
+        predicates_num, intentions_num = 5, 5
 
     config = COLLABORATION_CONFIGS[collab_setting]
     days = [str(i).zfill(2) for i in range(config['day_num_per_human'])]
@@ -265,13 +265,14 @@ if __name__ == "__main__":
     eval_intentions_llm_across_days, eval_predicates_llm_across_days, eval_predicates_semantic_across_days = [], [], []
 
     # Setup evaluation paths across days
-    eval_dir = pathlib.Path(results_path) / "benchmark" / f"collaboration_{collab_type}" / f"setting_{collab_setting}" / "oracle"
+    eval_dir = pathlib.Path(results_path) / "benchmark" / f"collaboration_{collab_type}" / f"setting_{collab_setting}" / "random_"
     eval_csv_path = eval_dir / "eval.xlsx"
     eval_json_path = eval_dir / "eval.json"
     os.makedirs(eval_dir, exist_ok=True)
 
     day_counter = 0
-    for day_idx, scene_idx, human_idx in zip(config['days'], config['scenes'], config['humans']):  
+    for day_idx, scene_idx, human_idx in zip(config['days'], config['scenes'], config['humans']):
+        file_idx = 0        
         day = days[day_idx]
         scene_id = scene_id_list[scene_idx]
         profile_string = profile_string_list[human_idx]
@@ -307,7 +308,7 @@ if __name__ == "__main__":
         profile_string = traits_summary_mllm(results_path, human_idx, scene_id, [profile_string, big_five], temperature_dict, model_dict, gpt=use_gpt_human, start_over=False)[0][1]
 
         # Setup evaluation paths per day
-        eval_dir_per_human = pathlib.Path(results_path) / "benchmark" / f"collaboration_{collab_type}" / f"setting_{collab_setting}" / "oracle" / str(human_idx).zfill(5) / scene_id
+        eval_dir_per_human = pathlib.Path(results_path) / "benchmark" / f"collaboration_{collab_type}" / f"setting_{collab_setting}" / "random_" / str(human_idx).zfill(5) / scene_id
         eval_csv_data = []
         eval_txt_path = eval_dir_per_human / f"train_data_human_{human_idx}_day_{day_idx}.txt"
         os.makedirs(eval_dir_per_human, exist_ok=True)
@@ -364,32 +365,59 @@ if __name__ == "__main__":
 
 
             # =====================================================================================================================
-            # Robot Knows Human Intention
+            # Robot Inferring Intentions
             if use_gpt_human:
                 video_dir_search_pattern = os.path.join(replay_dir, f"human/gpt_response/collaboration_{collab_type}/{str(human_idx).zfill(5)}/{scene_id}/{day}/*_{time_}")
             else:
                 video_dir_search_pattern = os.path.join(replay_dir, f"human/llama_response/collaboration_{collab_type}/{str(human_idx).zfill(5)}/{scene_id}/{day}/*_{time_}")
             video_dir = glob.glob(video_dir_search_pattern)[0]
             
-            robot_conversation_hist = []
             robot_retrieved_intentions = robot_intentions_hist[human_idx][-3:] if len(robot_intentions_hist[human_idx]) >= 3 else (robot_intentions_hist[human_idx] if robot_intentions_hist[human_idx] else [])
             robot_retrieved_predicates = []
-            pred_intention_sentence, robot_sampled_static_obj_dict = gt_intention_sentence, human_sampled_static_obj_dict
+
+            robot_conversation_hist = intention_discovery_mllm(results_path, human_idx, scene_id, [day, j, time_], [os.path.join(video_dir, "robot_scene_camera_rgb_video"), os.path.join(video_dir, "human_third_rgb_video")], [robot_retrieved_intentions, robot_retrieved_predicates, human_thoughts[0]], [inferred_profile[human_idx], inferred_traits[human_idx]], temperature_dict, model_dict, method="random_", collab=collab_type, setting=collab_setting, gpt=use_gpt_robot, start_over=start_logic_robot)
+            _, pred_intention_sentence_list, robot_sampled_static_obj_dict_list = sample_obj_by_similarity(robot_conversation_hist, static_obj_room_mapping, sentence_model, top_k=30)
+        
+            # All proposed intentions are accepted without validation
+            answer_intentions = ["yes"] * intentions_num
+            answer_intentions_within_day.extend(answer_intentions)
+
+            # Robot gets the intention with "Yes" answer
+            selected_intention_idx_list = get_intention_idx(answer_intentions)
+            selected_intention_sentence_list = [pred_intention_sentence_list[idx] for idx in selected_intention_idx_list]
+            selected_sampled_static_obj_dict_list = [robot_sampled_static_obj_dict_list[idx] for idx in selected_intention_idx_list]
 
             # Robot Inferring Predicates
-            robot_retrieved_predicates = []
-            robot_conversation_hist = predicates_discovery_mllm(results_path, human_idx, scene_id, [day, j, time_], [robot_sampled_static_obj_dict, dynamic_obj_room_mapping], [robot_retrieved_intentions, robot_retrieved_predicates, human_thoughts[0]], pred_intention_sentence, [inferred_profile[human_idx], inferred_traits[human_idx]], robot_conversation_hist, temperature_dict, model_dict, method="oracle", collab=collab_type, setting=collab_setting, gpt=use_gpt_robot, start_over=start_logic_robot)
-            robot_thoughts, robot_acts = extract_thoughts_and_acts(robot_conversation_hist[-1][1], search_txt=" Reason_human:")
-            if not robot_thoughts: robot_thoughts, robot_acts = extract_thoughts_and_acts(robot_conversation_hist[-1][1], search_txt="")
+            robot_thoughts, robot_acts = [], []
+
+            for k, (selected_intention_sentence, selected_sampled_static_obj_dict) in enumerate(zip(selected_intention_sentence_list, selected_sampled_static_obj_dict_list)):
+                robot_retrieved_predicates = []
+
+                robot_conversation_hist = predicates_discovery_mllm(results_path, human_idx, scene_id, [day, file_idx+k, time_], [selected_sampled_static_obj_dict, dynamic_obj_room_mapping], [robot_retrieved_intentions, robot_retrieved_predicates, human_thoughts[0]], selected_intention_sentence, [inferred_profile[human_idx], inferred_traits[human_idx]], robot_conversation_hist, temperature_dict, model_dict, method="random_", collab=collab_type, setting=collab_setting, gpt=use_gpt_robot, start_over=start_logic_robot)
+                robot_thoughts_batch, robot_acts_batch = extract_thoughts_and_acts(robot_conversation_hist[-1][1], search_txt=" Reason_human:")
+                if not robot_thoughts_batch: robot_thoughts_batch, robot_acts_batch = extract_thoughts_and_acts(robot_conversation_hist[-1][1], search_txt="")
+                robot_thoughts.extend(robot_thoughts_batch)
+                robot_acts.extend(robot_acts_batch)
+
+            # All proposed tasks are accepted without validation
+            answer_predicates = ["yes"] * intentions_num * predicates_num
+            answer_predicates_within_day.extend(answer_predicates)
 
             # Discussion Period: Human Judge Approving Collaborations
-            intentions_approval = ["yes"]
+            intentions_approval_res = intention_approval_mllm(results_path, human_idx, scene_id, [day, j, time_], [gt_intention_sentence, pred_intention_sentence_list], temperature_dict, model_dict, method="random_", collab=collab_type, setting=collab_setting, start_over=start_logic_robot)[0][1]
+            intentions_approval, _ = extract_intention_approval(intentions_approval_res)
             
-            predicates_approval_res = predicate_approval_mllm(results_path, human_idx, scene_id, [day, j, time_], [human_thoughts, gt_intention_sentence], extract_inhand_obj_human(human_acts, collab=collab_type), robot_thoughts, extract_inhand_obj_robot(robot_acts, collab=collab_type), temperature_dict, model_dict, method="oracle", collab=collab_type, setting=collab_setting, start_over=start_logic_robot)[0][1]
-            predicates_approval, _ = extract_predicate_approval(predicates_approval_res)
+            predicates_approval = []
+            for k, _ in enumerate(selected_intention_sentence_list):
+                predicates_approval_res = predicate_approval_mllm(results_path, human_idx, scene_id, [day, file_idx+k, time_], [human_thoughts, gt_intention_sentence], extract_inhand_obj_human(human_acts, collab=collab_type), robot_thoughts[k*predicates_num:(k+1)*predicates_num], extract_inhand_obj_robot(robot_acts[k*predicates_num:(k+1)*predicates_num], collab=collab_type), temperature_dict, model_dict, method="random_", collab=collab_type, setting=collab_setting, start_over=start_logic_robot)[0][1]
+                predicates_approval_batch, _ = extract_predicate_approval(predicates_approval_res)
+                predicates_approval.extend(predicates_approval_batch)
 
-            category_approval_res = category_approval_mllm(results_path, human_idx, scene_id, [day, j, time_], human_thoughts, extract_inhand_obj_human(human_acts, collab=collab_type), robot_thoughts, extract_inhand_obj_robot(robot_acts, collab=collab_type), temperature_dict, model_dict, method="oracle", collab=collab_type, setting=collab_setting, start_over=start_logic_robot)[0][1]
-            category_approval, _ = extract_predicate_approval(category_approval_res)
+            category_approval = []
+            for k, _ in enumerate(selected_intention_sentence_list):
+                category_approval_res = category_approval_mllm(results_path, human_idx, scene_id, [day, file_idx+k, time_], human_thoughts, extract_inhand_obj_human(human_acts, collab=collab_type), robot_thoughts[k*predicates_num:(k+1)*predicates_num], extract_inhand_obj_robot(robot_acts[k*predicates_num:(k+1)*predicates_num], collab=collab_type), temperature_dict, model_dict, method="random_", collab=collab_type, setting=collab_setting, start_over=start_logic_robot)[0][1]
+                category_approval_batch, _ = extract_predicate_approval(category_approval_res)
+                category_approval.extend(category_approval_batch)
 
             # Always append the correct intentions and tasks after the discussion
             robot_intentions_hist[human_idx].append(f"{gt_intention_sentence}")
@@ -397,17 +425,14 @@ if __name__ == "__main__":
 
             for k, (robot_thought, human_thought) in enumerate(zip(robot_thoughts, human_thoughts)):
                 robot_predicates_hist[human_idx].append(f"day {day_idx} time {time_} task {k}: {human_thought}")
- 
+       
             # Compute Evaluation Matrics
             for k in range(intentions_num):
                 labels_intentions_llm_within_day.append("Yes" if intentions_approval[k] == "yes" else "No")
 
-            for k in range(predicates_num):
+            for k in range(predicates_num * intentions_num):
                 labels_predicates_llm_within_day.append("Yes" if predicates_approval[k] == "yes" else "No")
                 labels_predicates_category_within_day.append("Yes" if category_approval[k] == "yes" else "No")
-
-            answer_intentions_within_day = ["yes"]*len(labels_intentions_llm_within_day)
-            answer_predicates_within_day = ["yes"]*len(labels_predicates_llm_within_day)
 
             eval_intentions_llm_within_day = calculate_accuracy_and_f1(answer_intentions_within_day, labels_intentions_llm_within_day, 2)
             eval_predicates_llm_within_day = calculate_accuracy_and_f1(answer_predicates_within_day, labels_predicates_llm_within_day, 2)
@@ -415,10 +440,13 @@ if __name__ == "__main__":
             eval_predicates_llm_across_days.append(eval_predicates_llm_within_day)
 
             pred_objs, gt_objs = [], []
-            for k in range(predicates_num):
-                pred_objs.append(robot_acts[k])
-                gt_objs.append(human_acts[k])
+            for k in range(predicates_num * len(selected_intention_sentence_list)):
+                if answer_predicates[k].lower() == "yes":
+                    pred_objs.append(robot_acts[k])
             pred_objs = extract_inhand_obj_robot(pred_objs, collab=collab_type)
+
+            for k in range(predicates_num):
+                gt_objs.append(human_acts[k])
             gt_objs = extract_inhand_obj_human(gt_objs, collab=collab_type)
 
             semantic_sim.append(calculate_semantic_similarity(gt_objs, pred_objs))
@@ -428,21 +456,25 @@ if __name__ == "__main__":
             eval_predicates_semantic_across_days.append(eval_predicates_semantic_within_day)
             
             # Data Visualization
-            append_evaluation_row(
-                eval_csv_data, k, predicates_num, time_,
-                gt_intention_sentence, pred_intention_sentence, None,
-                human_thoughts, human_acts, robot_thoughts, robot_acts, None,
-                profile_string, big_five, inferred_profile[human_idx], inferred_traits[human_idx],
-                (eval_big_five_across_days_latest, eval_big_five_across_days_voting),
-                intentions_approval, eval_intentions_llm_within_day,
-                predicates_approval, eval_predicates_llm_within_day,
-                category_approval, eval_predicates_semantic_within_day, method="oracle"
-            )
-            eval_csv_data.append([""] * 16)
+            for k in range(len(predicates_approval)):
+                append_evaluation_row(
+                    eval_csv_data, k, predicates_num, time_,
+                    gt_intention_sentence, pred_intention_sentence_list, answer_intentions,
+                    human_thoughts, human_acts, robot_thoughts, robot_acts, answer_predicates,
+                    profile_string, big_five, inferred_profile[human_idx], inferred_traits[human_idx],
+                    (eval_big_five_across_days_latest, eval_big_five_across_days_voting),
+                    intentions_approval, eval_intentions_llm_within_day,
+                    predicates_approval, eval_predicates_llm_within_day,
+                    category_approval, eval_predicates_semantic_within_day, method="random_"
+                )
+            eval_csv_data.append([""] * 18)
+
+            # keep track of the file index of the MLLM response at each time of the day
+            file_idx += len(selected_intention_sentence_list)
 
 
         # Robot Inferring Human Traits
-        fuzzy_traits = traits_inference_mllm(results_path, human_idx, scene_id, [day, 0, None], [robot_intentions_hist[human_idx][-13:], robot_predicates_hist[human_idx]], [inferred_profile[human_idx], inferred_traits[human_idx]], temperature_dict, model_dict, method="oracle", collab=collab_type, setting=collab_setting, gpt=use_gpt_robot, start_over=start_logic_robot)[0][1]
+        fuzzy_traits = traits_inference_mllm(results_path, human_idx, scene_id, [day, 0, None], [robot_intentions_hist[human_idx][-13:], robot_predicates_hist[human_idx]], [inferred_profile[human_idx], inferred_traits[human_idx]], temperature_dict, model_dict, method="random_", collab=collab_type, setting=collab_setting, gpt=use_gpt_robot, start_over=start_logic_robot)[0][1]
         inferred_traits[human_idx], inferred_profile[human_idx] = extract_scores_and_profile(fuzzy_traits)
         inferred_traits_hist[human_idx].append(inferred_traits[human_idx])
         inferred_profile_hist[human_idx].append(inferred_profile[human_idx])
@@ -450,7 +482,7 @@ if __name__ == "__main__":
         _, eval_big_five_across_days_voting = calculate_ocean_pearson_correlation(big_five, inferred_traits_hist[human_idx], latest=False)
         
         # Data Visualization
-        save_evaluation_results(eval_csv_path, eval_txt_path, eval_csv_data, None, None, str(day_counter), method="oracle")
+        save_evaluation_results(eval_csv_path, eval_txt_path, eval_csv_data, None, None, str(day_counter), method="random_")
         save_results(eval_json_path, eval_intentions_llm_across_days, eval_predicates_llm_across_days, eval_predicates_semantic_across_days)
         
         # End the current environment of the scene instance

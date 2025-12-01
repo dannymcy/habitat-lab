@@ -641,6 +641,9 @@ def update_data_with_traits(data_train, data_test, new_traits):
     """Update dataset entries with new traits while preserving other fields."""
     
     def update_single_dataset(dataset):
+        if dataset is None:
+            return None
+            
         updated_data = []
         for item in dataset:
             # Get the original text and split into lines
@@ -877,12 +880,22 @@ def save_results(eval_json_path, eval_intentions_llm_across_days, eval_predicate
     - For predicates semantic: (accuracy, f1_macro, f1_weighted, f1_binary, semantic_similarity)
     """
     # Extract metrics from the tuples
-    acc_intentions = [day[0] for day in eval_intentions_llm_across_days]
-    f1_macro_intentions = [day[1] for day in eval_intentions_llm_across_days]
-    f1_weighted_intentions = [day[2] for day in eval_intentions_llm_across_days]
-    f1_binary_intentions = [day[3] for day in eval_intentions_llm_across_days]
-    # Compute average of the three F1 scores for each day
-    f1_avg_intentions = [(day[1] + day[2] + day[3]) / 3 for day in eval_intentions_llm_across_days]
+    # Check if intentions data exists (for baseline ag_intent)
+    if eval_intentions_llm_across_days and len(eval_intentions_llm_across_days) > 0:
+        # Extract metrics from the tuples
+        acc_intentions = [day[0] for day in eval_intentions_llm_across_days]
+        f1_macro_intentions = [day[1] for day in eval_intentions_llm_across_days]
+        f1_weighted_intentions = [day[2] for day in eval_intentions_llm_across_days]
+        f1_binary_intentions = [day[3] for day in eval_intentions_llm_across_days]
+        # Compute average of the three F1 scores for each day
+        f1_avg_intentions = [(day[1] + day[2] + day[3]) / 3 for day in eval_intentions_llm_across_days]
+    else:
+        # No intention data (e.g., for ag_intent method)
+        acc_intentions = []
+        f1_macro_intentions = []
+        f1_weighted_intentions = []
+        f1_binary_intentions = []
+        f1_avg_intentions = []
     
     acc_predicates_llm = [day[0] for day in eval_predicates_llm_across_days]
     f1_macro_predicates_llm = [day[1] for day in eval_predicates_llm_across_days]
@@ -977,7 +990,7 @@ def append_evaluation_row(eval_csv_data, k, predicates_num, time_, gt_intention,
                           predicates_approval, eval_predicates, category_approval, 
                           eval_semantic, method="main"):
     """Append a row to evaluation CSV data."""
-    if method in ["main", "ag_human"]:
+    if method in ["main", "ag_human", "random_"]:
         if k == 0:
             # Full row
             eval_csv_data.append([time_, gt_intention, pred_intentions[k], 
@@ -1001,15 +1014,15 @@ def append_evaluation_row(eval_csv_data, k, predicates_num, time_, gt_intention,
     
     elif method in ["prompting", "oracle"]:
         # For prompting, we have single intention and direct tasks without classifiers
-        for k in range(predicates_num):
-            if k == 0:
+        for kk in range(predicates_num):
+            if kk == 0:
                 # Full row for first task
                 eval_csv_data.append([
                     time_, 
                     gt_intention,  # Human ground truth intention
                     pred_intentions,  # Single robot predicted intention
-                    f"{human_thoughts[k]} {human_acts[k]}",
-                    f"{robot_thoughts[k]} {robot_acts[k]}", 
+                    f"{human_thoughts[kk]} {human_acts[kk]}",
+                    f"{robot_thoughts[kk]} {robot_acts[kk]}", 
                     profile_string, 
                     big_five, 
                     inferred_profile, 
@@ -1026,9 +1039,39 @@ def append_evaluation_row(eval_csv_data, k, predicates_num, time_, gt_intention,
                 # Partial rows for remaining tasks
                 eval_csv_data.append([
                     "", "", "",
-                    f"{human_thoughts[k]} {human_acts[k]}",
-                    f"{robot_thoughts[k]} {robot_acts[k]}"
+                    f"{human_thoughts[kk]} {human_acts[kk]}",
+                    f"{robot_thoughts[kk]} {robot_acts[kk]}"
                 ] + [""] * 11)
+
+    elif method == "ag_intent":
+            # For ag_intent, no intention inference - directly to tasks
+            for kk in range(predicates_num):
+                if kk == 0:
+                    # Full row for first task - 14 columns (no intention columns)
+                    eval_csv_data.append([
+                        time_, 
+                        gt_intention,  # Human ground truth intention
+                        f"{human_thoughts[kk]} {human_acts[kk]}",
+                        f"{robot_thoughts[kk]} {robot_acts[kk]}", 
+                        answer_predicates[kk],  # Include classifier result for tasks
+                        profile_string, 
+                        big_five, 
+                        inferred_profile, 
+                        inferred_traits,
+                        eval_big_five, 
+                        predicates_approval, 
+                        eval_predicates, 
+                        category_approval, 
+                        eval_semantic
+                    ])
+                else:
+                    # Partial rows for remaining tasks - 14 columns (3 data + 11 empty)
+                    eval_csv_data.append([
+                        "", "",
+                        f"{human_thoughts[kk]} {human_acts[kk]}",
+                        f"{robot_thoughts[kk]} {robot_acts[kk]}",
+                        answer_predicates[kk]
+                    ] + [""] * 9)
 
 
 def save_evaluation_results(eval_csv_path, eval_txt_path, eval_csv_data, data_train_intentions, data_train_predicates, day, method="main"):
@@ -1044,7 +1087,7 @@ def save_evaluation_results(eval_csv_path, eval_txt_path, eval_csv_data, data_tr
         day: Current day string for sheet naming
     """
     # Define header for the Excel file
-    if method in ["main", "ag_human"]:
+    if method in ["main", "ag_human", "random_"]:
         header = [
             "Time", 
             "Human Intention", 
@@ -1094,11 +1137,16 @@ def save_evaluation_results(eval_csv_path, eval_txt_path, eval_csv_data, data_tr
                     worksheet.column_dimensions[get_column_letter(col_idx + 1)].width = column_length + 2
         
         # Save training data to text file
-        with open(eval_txt_path, 'w') as f:
-            f.write("data_train_intentions:\n")
-            f.write(str(data_train_intentions) + "\n\n")
-            f.write("data_train_predicates:\n")
-            f.write(str(data_train_predicates) + "\n\n")
+        if method in ["main", "ag_human"] and data_train_intentions is not None and data_train_predicates is not None:
+            with open(eval_txt_path, 'w') as f:
+                f.write("data_train_intentions:\n")
+                f.write(str(data_train_intentions) + "\n\n")
+                f.write("data_train_predicates:\n")
+                f.write(str(data_train_predicates) + "\n\n")
+        elif method == "random_":
+            with open(eval_txt_path, 'w') as f:
+                f.write(f"{method} Method - No classifier training data\n")
+                f.write(f"Day: {day}\n")
     
     elif method in ["prompting", "oracle"]:
         # Simplified header without classifier columns
@@ -1145,5 +1193,53 @@ def save_evaluation_results(eval_csv_path, eval_txt_path, eval_csv_data, data_tr
         # No training data for prompting (no classifiers to train)
         if eval_txt_path:
             with open(eval_txt_path, 'w') as f:
-                f.write("Direct Prompting Method - No classifier training data\n")
+                f.write(f"{method} Method - No classifier training data\n")
                 f.write(f"Day: {day}\n")
+
+    elif method == "ag_intent":
+        # Header without intention inference columns
+        header = [
+            "Time", 
+            "Human Intention",  # Ground truth only
+            "Human Task", 
+            "Robot Inferred Task", 
+            "Robot Task Classification",  # Keep classifier for tasks
+            "Human Traits", 
+            "Human Big-5", 
+            "Robot Inferred Traits", 
+            "Robot Inferred Big-5", 
+            "Big-5 Eval (Corr_latest, Corr_voting)", 
+            "Task LLM Approval",  
+            "Task Eval (Acc, F1 (macro, weighted, binary))", 
+            "Task Object Category Approval", 
+            "Task Object Category Eval; Semantic Similarity"
+        ]  # Total: 14 columns
+        
+        # Create DataFrame
+        df = pd.DataFrame(eval_csv_data, columns=header)
+        
+        # Save to Excel with auto-width columns
+        if not os.path.exists(eval_csv_path):
+            with pd.ExcelWriter(eval_csv_path, engine='openpyxl', mode='w') as writer:
+                df.to_excel(writer, index=False, sheet_name=f'eval_{day}')
+                worksheet = writer.sheets[f'eval_{day}']
+                for column in df:
+                    column_length = max(df[column].astype(str).map(len).max(), len(column))
+                    col_idx = df.columns.get_loc(column)
+                    worksheet.column_dimensions[get_column_letter(col_idx + 1)].width = column_length + 2
+        else:
+            with pd.ExcelWriter(eval_csv_path, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
+                df.to_excel(writer, index=False, sheet_name=f'eval_{day}')
+                worksheet = writer.sheets[f'eval_{day}']
+                for column in df:
+                    column_length = max(df[column].astype(str).map(len).max(), len(column))
+                    col_idx = df.columns.get_loc(column)
+                    worksheet.column_dimensions[get_column_letter(col_idx + 1)].width = column_length + 2
+        
+        # Save only task training data
+        if eval_txt_path and data_train_predicates:
+            with open(eval_txt_path, 'w') as f:
+                f.write("Intention Agnostic Method - Task classifier training only\n")
+                f.write(f"Day: {day}\n")
+                f.write("data_train_predicates:\n")
+                f.write(str(data_train_predicates) + "\n\n")

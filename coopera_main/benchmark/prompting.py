@@ -391,7 +391,6 @@ if __name__ == "__main__":
             predicates_approval_res = predicate_approval_mllm(results_path, human_idx, scene_id, [day, j, time_], [human_thoughts, gt_intention_sentence], extract_inhand_obj_human(human_acts, collab=collab_type), robot_thoughts, extract_inhand_obj_robot(robot_acts, collab=collab_type), temperature_dict, model_dict, method="prompting", collab=collab_type, setting=collab_setting, start_over=start_logic_robot)[0][1]
             predicates_approval, _ = extract_predicate_approval(predicates_approval_res)
 
-            category_approval = []
             category_approval_res = category_approval_mllm(results_path, human_idx, scene_id, [day, j, time_], human_thoughts, extract_inhand_obj_human(human_acts, collab=collab_type), robot_thoughts, extract_inhand_obj_robot(robot_acts, collab=collab_type), temperature_dict, model_dict, method="prompting", collab=collab_type, setting=collab_setting, start_over=start_logic_robot)[0][1]
             category_approval, _ = extract_predicate_approval(category_approval_res)
 
